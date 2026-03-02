@@ -110,29 +110,7 @@ flowchart TD
     style J fill:#ffebee
 ```
 
-## 4. eBUZIMA Payload Expansion
-
-```mermaid
-flowchart TD
-    A[Incoming eBUZIMA JSON] --> B[EbuzimaPayloadMapper]
-
-    B --> C[FHIR Encounter<br/>from visit data]
-    B --> D[FHIR Observation 1<br/>from clinical obs]
-    B --> E[FHIR Observation 2<br/>from vital signs]
-    B --> F[FHIR Immunization<br/>if vaccination data present]
-
-    C --> G[CloudEvent 1<br/>type: org.openphc.cce.encounter]
-    D --> H[CloudEvent 2<br/>type: org.openphc.cce.observation]
-    E --> I[CloudEvent 3<br/>type: org.openphc.cce.observation]
-    F --> J[CloudEvent 4<br/>type: org.openphc.cce.immunization]
-
-    G --> K[Forward each to Collector]
-    H --> K
-    I --> K
-    J --> K
-```
-
-## 5. Collector Forwarding with Retry
+## 4. Collector Forwarding with Retry
 
 ```mermaid
 sequenceDiagram
@@ -180,7 +158,7 @@ sequenceDiagram
     end
 ```
 
-## 6. OpenHIM Registration & Heartbeat Lifecycle
+## 5. OpenHIM Registration & Heartbeat Lifecycle
 
 ```mermaid
 sequenceDiagram
@@ -218,7 +196,7 @@ sequenceDiagram
     end
 ```
 
-## 7. Error Handling Flow
+## 6. Error Handling Flow
 
 ```mermaid
 flowchart TD
@@ -260,7 +238,7 @@ flowchart TD
     style N fill:#ffebee
 ```
 
-## 8. Component Dependency Graph
+## 7. Component Dependency Graph
 
 ```mermaid
 flowchart TD
@@ -316,7 +294,7 @@ flowchart TD
     style HB fill:#e1bee7
 ```
 
-## 9. Deployment Topology
+## 8. Deployment Topology
 
 ```mermaid
 flowchart LR

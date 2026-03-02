@@ -40,6 +40,7 @@ curl -s http://localhost:8082/actuator/health | jq
 curl -X POST http://localhost:8082/inbound/ebuzima \
   -H "Content-Type: application/json" \
   -H "X-OpenHIM-ClientID: ebuzima-emr-client" \
+  -H "X-Source-System: ebuzima" \
   -d '{"visitId":"visit-001","patientUpid":"260225-0002-5501","facilityId":"0002","visitType":"ANC_VISIT","clinician":"Dr. Uwase","visitDate":"2026-02-25T08:00:00Z"}'
 # → 202 Accepted
 ```

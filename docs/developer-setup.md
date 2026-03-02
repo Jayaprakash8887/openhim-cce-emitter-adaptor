@@ -403,6 +403,7 @@ curl -s http://localhost:8082/actuator/prometheus | grep cce_emitter
 curl -X POST http://localhost:8082/inbound/ebuzima \
   -H "Content-Type: application/json" \
   -H "X-OpenHIM-ClientID: ebuzima-emr-client" \
+  -H "X-Source-System: ebuzima" \
   -H "X-Facility-Id: FAC-001" \
   -d '{
     "visitId": "ebz-visit-001",

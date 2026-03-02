@@ -582,6 +582,7 @@ public class EbuzimaSourceAdaptor extends AbstractSourceAdaptor {
     @Override
     public boolean canHandle(InboundRequest request) {
         return ebuzimaClientId.equalsIgnoreCase(request.getHeader("X-OpenHIM-ClientID"))
+            || "ebuzima".equalsIgnoreCase(request.getHeader("X-Source-System"))
             || request.getPath().contains("/ebuzima");
     }
 
@@ -684,14 +685,17 @@ public class InboundRequest {
 
     public static InboundRequest from(String body, Map<String, String> headers, String path) {
         String clientId = headers.get("x-openhim-clientid");
-        String sourceSystem = clientId != null ? clientId : deriveSourceFromPath(path);
+        String sourceSystem = headers.get("x-source-system");
+        String resolvedSource = clientId != null ? clientId
+            : sourceSystem != null ? sourceSystem
+            : deriveSourceFromPath(path);
         String facilityId = headers.get("x-facility-id");
         String correlationId = headers.get("x-correlation-id");
         String sourceEventId = headers.get("x-source-event-id");
         String authorization = headers.get("authorization");
 
         SourceMetadata meta = new SourceMetadata(
-            sourceSystem, facilityId, sourceEventId,
+            resolvedSource, facilityId, sourceEventId,
             correlationId, OffsetDateTime.now(ZoneOffset.UTC), path,
             authorization);
 

@@ -15,7 +15,7 @@ All inbound endpoints share the same controller logic (`InboundEventController`)
 
 ### 2.1 POST /inbound
 
-Generic inbound endpoint. Routes to `EbuzimaSourceAdaptor` when `X-OpenHIM-ClientID` header matches the configured eBUZIMA client ID, or eBUZIMA payload is detected.
+Generic inbound endpoint. Routes to `EbuzimaSourceAdaptor` when `X-OpenHIM-ClientID` or `X-Source-System` header matches the configured eBUZIMA client ID, or eBUZIMA payload is detected.
 
 ```
 POST /inbound
@@ -39,6 +39,7 @@ POST /inbound/ebuzima
 |--------|----------|-------------|
 | `Content-Type` | Yes | `application/json` |
 | `X-OpenHIM-ClientID` | No | OpenHIM-authenticated client ID. Matched against configured `cce.emitter.sources.ebuzima.client-id` for adaptor routing. Automatically set by OpenHIM Core after client authentication. |
+| `X-Source-System` | No | Source system identifier (e.g., `ebuzima`). Fallback when `X-OpenHIM-ClientID` is absent. |
 | `X-Facility-Id` | No | Facility FOSA ID |
 | `X-Source-Event-Id` | No | Source system's original event ID |
 | `X-Correlation-Id` | No | Cross-service trace ID |
@@ -96,6 +97,7 @@ POST /inbound/ebuzima
 curl -X POST http://localhost:8082/inbound/ebuzima \
   -H "Content-Type: application/json" \
   -H "X-OpenHIM-ClientID: ebuzima-emr-client" \
+  -H "X-Source-System: ebuzima" \
   -H "X-Facility-Id: FAC-FOSA-001" \
   -d '{
     "visitId": "ebz-visit-9876",

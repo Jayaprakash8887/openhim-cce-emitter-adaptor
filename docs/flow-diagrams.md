@@ -95,7 +95,7 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    A[POST /inbound or /inbound/ebuzima] --> B{X-OpenHIM-ClientID<br/>matches configured<br/>eBUZIMA client ID?}
+    A[POST /inbound or /inbound/ebuzima] --> B{X-OpenHIM-ClientID or<br/>X-Source-System<br/>matches eBUZIMA?}
 
     B -->|Yes| C[EbuzimaSourceAdaptor]
     B -->|No / not set| G{URL Path?}

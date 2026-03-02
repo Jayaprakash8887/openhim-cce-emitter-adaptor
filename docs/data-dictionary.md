@@ -10,7 +10,7 @@ The adaptor outputs CloudEvents v1.0-compliant JSON to the CCE Collector.
 |-------|------|----------|--------|-------------|
 | `specversion` | string | **Yes** — always `"1.0"` | Static | CloudEvents specification version |
 | `id` | string (UUID) | **Yes** | Generated | Unique event identifier (`UUID.randomUUID()` or deterministic hash) |
-| `source` | string (URI) | **Yes** | Adaptor | Source system identifier (e.g., `"rhie-mediator"`, `"ebuzima"`, `"smartcare"`) |
+| `source` | string (URI) | **Yes** | Adaptor | Source system identifier (e.g. `"ebuzima"`) |
 | `type` | string | **Yes** | Adaptor | Normalized event type: `"org.openphc.cce.<resourcetype>"` (lowercase). |
 | `subject` | string | Recommended | Extracted from FHIR | Patient UPID (`Patient/<upid>` or bare UPID). Used as Kafka partition key. |
 | `time` | string (ISO-8601) | Recommended | Adaptor | Event creation timestamp in UTC |
@@ -64,6 +64,7 @@ The adaptor outputs CloudEvents v1.0-compliant JSON to the CCE Collector.
 | **Body** | HTTP body | eBUZIMA JSON payload |
 | **Content-Type** | Header | `application/json` |
 | **X-OpenHIM-ClientID** | Header (optional) | OpenHIM-authenticated client ID. Matched against `cce.emitter.sources.ebuzima.client-id` for routing. Set by OpenHIM Core. |
+| **X-Source-System** | Header (optional) | Source system identifier (e.g., `ebuzima`). Fallback when `X-OpenHIM-ClientID` is absent. May be set by the source system or OpenHIM channel config. |
 | **X-Facility-Id** | Header (optional) | Facility FOSA ID |
 | **X-Source-Event-Id** | Header (optional) | Source system's event ID |
 | **X-Correlation-Id** | Header (optional) | Trace ID for cross-service correlation |
@@ -83,7 +84,7 @@ The adaptor outputs CloudEvents v1.0-compliant JSON to the CCE Collector.
 
 | Field | Type | Source | Description |
 |-------|------|--------|-------------|
-| `sourceIdentifier` | String | Resolved from `X-OpenHIM-ClientID` via config, or path segment | e.g., `"ebuzima"` |
+| `sourceIdentifier` | String | Resolved from `X-OpenHIM-ClientID` or `X-Source-System` header, or path segment | e.g., `"ebuzima"` |
 | `facilityId` | String | `X-Facility-Id` header | Nullable |
 | `sourceEventId` | String | `X-Source-Event-Id` header | Nullable |
 | `correlationId` | String | `X-Correlation-Id` header | Nullable |
@@ -127,7 +128,7 @@ Prefix: `cce.emitter.sources`
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `cce.emitter.sources.ebuzima.client-id` | String | `ebuzima-emr-client` | OpenHIM client ID for eBUZIMA EMR. Matched against `X-OpenHIM-ClientID` header for adaptor routing. |
+| `cce.emitter.sources.ebuzima.client-id` | String | `ebuzima-emr-client` | OpenHIM client ID for eBUZIMA EMR. Matched against `X-OpenHIM-ClientID` or `X-Source-System` header for adaptor routing. |
 
 ### 3.4 Server Properties
 

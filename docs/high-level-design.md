@@ -182,10 +182,10 @@ All `SourceAdaptor` implementations are Spring `@Component` beans. `SourceAdapto
 
 ```mermaid
 flowchart TD
-    A[Incoming Request] --> B{X-Source-System header?}
+    A[Incoming Request] --> B{X-OpenHIM-ClientID<br/>matches configured<br/>eBUZIMA client ID?}
 
-    B -->|ebuzima| C[EbuzimaSourceAdaptor]
-    B -->|not set| G{Check URL path}
+    B -->|Yes| C[EbuzimaSourceAdaptor]
+    B -->|No / not set| G{Check URL path}
 
     G -->|/inbound/ebuzima| C
     G -->|/inbound| H{eBUZIMA payload detected?}

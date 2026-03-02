@@ -10,8 +10,6 @@ The Emitter Adaptor is an **OpenHIM mediator** built as a standalone **Spring Bo
 4. **Constructing** CloudEvents v1.0 envelopes with CCE-required fields and extensions
 5. **Forwarding** the normalized CloudEvents to the CCE Collector Service via `RestClient`
 
-The Collector performs **minimal validation** — only the `type` field must be present and non-empty. Event type normalization remains the adaptor's responsibility for downstream service (Compliance, Scheduler) compatibility.
-
 ## 2. System Context
 
 ```

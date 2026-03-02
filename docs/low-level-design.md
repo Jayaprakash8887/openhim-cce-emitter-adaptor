@@ -564,18 +564,21 @@ public abstract class AbstractSourceAdaptor implements SourceAdaptor {
 public class EbuzimaSourceAdaptor extends AbstractSourceAdaptor {
 
     private final EbuzimaPayloadMapper mapper;
+    private final String ebuzimaClientId;
 
     public EbuzimaSourceAdaptor(FhirContext fhirContext,
                                  EventTypeNormalizer normalizer,
                                  PatientIdExtractor extractor,
-                                 CloudEventEnvelopeBuilder builder) {
+                                 CloudEventEnvelopeBuilder builder,
+                                 @Value("${cce.emitter.sources.ebuzima.client-id}") String ebuzimaClientId) {
         super(fhirContext, normalizer, extractor, builder);
         this.mapper = new EbuzimaPayloadMapper(fhirContext);
+        this.ebuzimaClientId = ebuzimaClientId;
     }
 
     @Override
     public boolean canHandle(InboundRequest request) {
-        return "ebuzima".equalsIgnoreCase(request.getHeader("X-Source-System"))
+        return ebuzimaClientId.equalsIgnoreCase(request.getHeader("X-OpenHIM-ClientID"))
             || request.getPath().contains("/ebuzima");
     }
 
@@ -674,8 +677,8 @@ public class InboundRequest {
     private final SourceMetadata metadata;
 
     public static InboundRequest from(String body, Map<String, String> headers, String path) {
-        String sourceSystem = headers.getOrDefault("x-source-system",
-            deriveSourceFromPath(path));
+        String clientId = headers.get("x-openhim-clientid");
+        String sourceSystem = clientId != null ? clientId : deriveSourceFromPath(path);
         String facilityId = headers.get("x-facility-id");
         String correlationId = headers.get("x-correlation-id");
         String sourceEventId = headers.get("x-source-event-id");

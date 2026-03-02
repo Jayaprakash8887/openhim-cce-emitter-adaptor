@@ -11,7 +11,7 @@ The adaptor outputs CloudEvents v1.0-compliant JSON to the CCE Collector.
 | `specversion` | string | **Yes** — always `"1.0"` | Static | CloudEvents specification version |
 | `id` | string (UUID) | **Yes** | Generated | Unique event identifier (`UUID.randomUUID()` or deterministic hash) |
 | `source` | string (URI) | **Yes** | Adaptor | Source system identifier (e.g., `"rhie-mediator"`, `"ebuzima"`, `"smartcare"`) |
-| `type` | string | **Yes** — **Collector-mandatory** | Adaptor | Normalized event type: `"org.openphc.cce.<resourcetype>"` (lowercase). **The only field the Collector validates.** |
+| `type` | string | **Yes** | Adaptor | Normalized event type: `"org.openphc.cce.<resourcetype>"` (lowercase). |
 | `subject` | string | Recommended | Extracted from FHIR | Patient UPID (`Patient/<upid>` or bare UPID). Used as Kafka partition key. |
 | `time` | string (ISO-8601) | Recommended | Adaptor | Event creation timestamp in UTC |
 | `datacontenttype` | string | Recommended | Static | Always `"application/fhir+json"` |
@@ -27,10 +27,8 @@ The adaptor outputs CloudEvents v1.0-compliant JSON to the CCE Collector.
 
 | Rule | Detail |
 |------|--------|
-| **Collector enforces only `type`** | The Collector validates that the `type` field is present and non-empty. All other fields pass through without server-side validation. |
 | **Adaptor populates all practical fields** | Despite relaxed Collector validation, the adaptor should populate `id`, `source`, `type`, `subject`, `time`, `datacontenttype`, and `data` for correct downstream processing by the Compliance Service. |
 | **Extension attributes are lowercase** | Per CloudEvents spec, custom extension attributes use `lowercase` without separators: `facilityid`, `sourceeventid`, `correlationid`, `protocolinstanceid`, etc. |
-| **`type` normalization** | Pattern: `org.openphc.cce.<fhir-resource-type-lowercase>` (e.g., `org.openphc.cce.encounter`, `org.openphc.cce.observation`). The Collector does not enforce this pattern, but the Compliance Service's trigger matching depends on it. |
 
 ### 1.3 Sample CloudEvent
 
@@ -65,7 +63,7 @@ The adaptor outputs CloudEvents v1.0-compliant JSON to the CCE Collector.
 |---------|--------|-------------|
 | **Body** | HTTP body | eBUZIMA JSON payload |
 | **Content-Type** | Header | `application/json` |
-| **X-Source-System** | Header (optional) | Source system identifier (`ebuzima`). Defaults to eBUZIMA if absent. |
+| **X-OpenHIM-ClientID** | Header (optional) | OpenHIM-authenticated client ID. Matched against `cce.emitter.sources.ebuzima.client-id` for routing. Set by OpenHIM Core. |
 | **X-Facility-Id** | Header (optional) | Facility FOSA ID |
 | **X-Source-Event-Id** | Header (optional) | Source system's event ID |
 | **X-Correlation-Id** | Header (optional) | Trace ID for cross-service correlation |
@@ -84,7 +82,7 @@ The adaptor outputs CloudEvents v1.0-compliant JSON to the CCE Collector.
 
 | Field | Type | Source | Description |
 |-------|------|--------|-------------|
-| `sourceIdentifier` | String | `X-Source-System` header or path segment | e.g., `"ebuzima"` |
+| `sourceIdentifier` | String | Resolved from `X-OpenHIM-ClientID` via config, or path segment | e.g., `"ebuzima"` |
 | `facilityId` | String | `X-Facility-Id` header | Nullable |
 | `sourceEventId` | String | `X-Source-Event-Id` header | Nullable |
 | `correlationId` | String | `X-Correlation-Id` header | Nullable |
@@ -121,7 +119,15 @@ Prefix: `cce.collector`
 | `cce.collector.retry.max-attempts` | int | `3` | Maximum retry attempts for 5xx/timeout |
 | `cce.collector.retry.backoff-ms` | int | `1000` | Initial backoff delay in ms (doubles per retry) |
 
-### 3.3 Server Properties
+### 3.3 Emitter Source Properties
+
+Prefix: `cce.emitter.sources`
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `cce.emitter.sources.ebuzima.client-id` | String | `ebuzima-emr-client` | OpenHIM client ID for eBUZIMA EMR. Matched against `X-OpenHIM-ClientID` header for adaptor routing. |
+
+### 3.4 Server Properties
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|

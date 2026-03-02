@@ -173,6 +173,10 @@ cce:
     retry:
       max-attempts: 3
       backoff-ms: 1000
+  emitter:
+    sources:
+      ebuzima:
+        client-id: ebuzima-emr-client  # OpenHIM client ID for eBUZIMA EMR
 
 # Actuator & Metrics
 management:
@@ -218,6 +222,10 @@ openhim:
 cce:
   collector:
     url: http://localhost:5001
+  emitter:
+    sources:
+      ebuzima:
+        client-id: ebuzima-emr-client
 
 logging:
   level:
@@ -241,6 +249,10 @@ cce:
   collector:
     url: ${CCE_COLLECTOR_URL}
     timeout: ${CCE_COLLECTOR_TIMEOUT:5000}
+  emitter:
+    sources:
+      ebuzima:
+        client-id: ${EBUZIMA_CLIENT_ID}
 
 logging:
   level:
@@ -390,7 +402,7 @@ curl -s http://localhost:8082/actuator/prometheus | grep cce_emitter
 ```bash
 curl -X POST http://localhost:8082/inbound/ebuzima \
   -H "Content-Type: application/json" \
-  -H "X-Source-System: ebuzima" \
+  -H "X-OpenHIM-ClientID: ebuzima-emr-client" \
   -H "X-Facility-Id: FAC-001" \
   -d '{
     "visitId": "ebz-visit-001",

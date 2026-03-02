@@ -1,4 +1,4 @@
-![alt text](image.png)# CCE Emitter Adaptor — Flow Diagrams
+# CCE Emitter Adaptor — Flow Diagrams
 
 All diagrams use Mermaid notation.
 

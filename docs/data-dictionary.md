@@ -147,28 +147,40 @@ Prefix: `cce.emitter.sources`
 | `version` | String | `"1.0.0"` |
 | `name` | String | `"CCE Emitter Adaptor"` |
 | `description` | String | Human-readable description |
-| `defaultChannelConfig` | Array | Channel definitions for auto-provisioning |
+| `defaultChannelConfig` | Array | **Empty array `[]`** — no channel auto-provisioning (see §4.2) |
 | `endpoints` | Array | Mediator endpoint definitions |
 
-### 4.2 Default Channel Config
+### 4.2 Channel Configuration (Manual — No Auto-Provisioning)
+
+The mediator does **not** auto-provision an OpenHIM channel. The `defaultChannelConfig` array in the registration descriptor is intentionally **empty**.
+
+**Reason:** The eBUZIMA EMR already has an existing OpenHIM channel that routes its requests to the SHR and other downstream systems via other mediators. Auto-provisioning a new channel could conflict with or override the existing routing.
+
+**Deployment approach:** The OpenHIM administrator adds the CCE Emitter Adaptor as a **secondary route** on the existing eBUZIMA channel. This way, OpenHIM Core forwards a copy of each eBUZIMA request to both the existing primary mediator (e.g., SHR) and our CCE Emitter Adaptor simultaneously.
+
+#### Secondary Route Entry
+
+The admin adds the following route to the existing eBUZIMA channel via the OpenHIM Console:
 
 ```json
 {
   "name": "CCE Emitter Adaptor",
-  "urlPattern": "^/inbound.*$",
-  "routes": [
-    {
-      "name": "CCE Emitter Adaptor Route",
-      "host": "cce-emitter-adaptor",
-      "port": 8082,
-      "primary": true,
-      "type": "http"
-    }
-  ],
-  "allow": ["cce-role"],
+  "host": "cce-emitter-adaptor",
+  "port": 8082,
+  "path": "/inbound",
+  "primary": false,
   "type": "http"
 }
 ```
+
+| Field | Value | Description |
+|-------|-------|-------------|
+| `name` | `CCE Emitter Adaptor` | Display name in OpenHIM Console |
+| `host` | `cce-emitter-adaptor` | Hostname/IP of the adaptor (Docker service name or IP) |
+| `port` | `8082` | Adaptor HTTP port |
+| `path` | `/inbound` | Adaptor inbound endpoint |
+| `primary` | `false` | **Secondary route** — does not affect the primary response to OpenHIM |
+| `type` | `http` | HTTP route |
 
 ## 5. Collector Response Model
 

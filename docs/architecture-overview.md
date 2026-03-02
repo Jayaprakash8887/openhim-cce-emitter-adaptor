@@ -22,6 +22,7 @@ The Emitter Adaptor is an **OpenHIM mediator** built as a standalone **Spring Bo
 ┌─────────────────────────────────────────────────────────────┐
 │                    OpenHIM Core (RHIE)                        │
 │   Channel routing, transaction logging, access control       │
+│   (existing eBUZIMA channel — adaptor added as secondary route)│
 └──────────────────────────┬──────────────────────────────────┘
                            │  HTTP (routed to mediator)
                            ▼
@@ -121,7 +122,7 @@ The OpenHIM mediator contract is implemented with plain Spring Boot components �
 
 | Phase | Mechanism | Description |
 |-------|-----------|-------------|
-| **Registration** | `MediatorRegistrar` (`@PostConstruct` or `ApplicationReadyEvent`) | POST mediator descriptor to OpenHIM Core `/mediators` |
+| **Registration** | `MediatorRegistrar` (`@PostConstruct` or `ApplicationReadyEvent`) | POST mediator descriptor to OpenHIM Core `/mediators` (`defaultChannelConfig` = `[]` — no channel auto-provisioning) |
 | **Heartbeat** | `HeartbeatScheduler` (`@Scheduled`) | Periodic POST to `/mediators/{urn}/heartbeat`; receives dynamic config |
 | **Dynamic Config** | `DynamicConfigService` | Parses heartbeat response, updates runtime config (e.g., Collector URL) |
 | **Response Wrapping** | `OpenHimResponseWrapper` | Wraps `@RestController` responses in `application/json+openhim` envelope |

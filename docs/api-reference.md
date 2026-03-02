@@ -270,7 +270,7 @@ Content-Type: application/json
   "version": "1.0.0",
   "name": "CCE Emitter Adaptor",
   "description": "Transforms source system events into CloudEvents for CCE Compliance pipeline",
-  "defaultChannelConfig": [...],
+  "defaultChannelConfig": [],
   "endpoints": [...]
 }
 ```

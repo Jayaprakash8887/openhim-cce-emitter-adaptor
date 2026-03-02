@@ -111,8 +111,9 @@ sequenceDiagram
 
     App->>App: ApplicationReadyEvent
     App->>Reg: register()
-    Reg->>Reg: Build MediatorDescriptor JSON
+    Reg->>Reg: Build MediatorDescriptor JSON (defaultChannelConfig = [])
     Reg->>Core: POST /mediators (descriptor)
+    Note right of Core: No channel auto-provisioned —<br/>admin adds secondary route<br/>on existing eBUZIMA channel
 
     alt Success
         Core-->>Reg: 201 Created (or 200 Updated)
@@ -294,7 +295,7 @@ public class CollectorForwardingService {
 
 | Concern | Mechanism |
 |---------|-----------|
-| **OpenHIM ↔ Mediator** | OpenHIM Core routes requests; mediator trusts OpenHIM channel auth |
+| **OpenHIM ↔ Mediator** | OpenHIM Core routes requests via existing eBUZIMA channel (secondary route); mediator trusts OpenHIM channel auth |
 | **Mediator → OpenHIM Core API** | Basic auth (`root@openhim.org` / password) for registration + heartbeat |
 | **Mediator → CCE Collector** | Authorization header passed through from inbound request (originated by source system, forwarded via OpenHIM). CCE Gateway validates the token (OAuth scope: `events:write`). |
 | **TLS** | HTTPS connections configurable via Spring Boot `server.ssl.*` properties |

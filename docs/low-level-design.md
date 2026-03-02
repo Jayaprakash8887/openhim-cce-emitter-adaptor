@@ -363,7 +363,11 @@ public class MediatorRegistrar {
     }
 
     private MediatorDescriptor buildDescriptor() {
-        // Build full mediator registration JSON
+        // Build mediator registration JSON:
+        // - defaultChannelConfig = [] (empty — no auto-provisioning;
+        //   eBUZIMA channel already exists, admin adds this mediator
+        //   as a secondary route on the existing channel)
+        // - endpoints, configDefs, config populated from OpenHimProperties
         // See copilot-instructions.md for complete structure
     }
 }

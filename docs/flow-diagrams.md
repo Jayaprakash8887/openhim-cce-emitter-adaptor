@@ -193,7 +193,8 @@ sequenceDiagram
     Note over App: ApplicationReadyEvent
 
     App->>Reg: @EventListener → register()
-    Reg->>Core: POST /mediators (descriptor JSON)
+    Reg->>Core: POST /mediators (descriptor JSON, defaultChannelConfig=[])
+    Note right of Core: No channel auto-provisioned —<br/>admin adds secondary route<br/>on existing eBUZIMA channel
 
     alt Registration OK
         Core-->>Reg: 201 Created
@@ -341,7 +342,7 @@ flowchart LR
 
     A2 --> OHC
 
-    OHC -->|"Route /inbound/**"| EA
+    OHC -->|"Secondary route"| EA
     EA -->|"Register + heartbeat"| OHC_API
     EA -->|"POST /v1/events"| COL
     COL --> KAFKA

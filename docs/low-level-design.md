@@ -731,7 +731,43 @@ public record SourceMetadata(
 ) {}
 ```
 
-### 4.4 TransformationResult
+### 4.4 CollectorResponse
+
+```java
+/**
+ * Maps to the Collector Service's JSON response.
+ *
+ * Success/Duplicate: { "data": { "eventId": "...", "status": "accepted"|"duplicate",
+ *                                "correlationId": "...", "timestamp": "..." } }
+ * Error:            { "error": { "code": "VALIDATION_ERROR", "message": "..." } }
+ */
+public record CollectorResponse(
+    Data data,
+    Error error
+) {
+    public record Data(
+        String eventId,
+        String status,
+        String correlationId,
+        String timestamp
+    ) {}
+
+    public record Error(
+        String code,
+        String message
+    ) {}
+
+    public boolean isAccepted() { return data != null && "accepted".equals(data.status()); }
+    public boolean isDuplicate() { return data != null && "duplicate".equals(data.status()); }
+    public boolean isError() { return error != null; }
+
+    public static CollectorResponse from(ResponseEntity<String> response) {
+        // Jackson ObjectMapper deserialization from response body
+    }
+}
+```
+
+### 4.5 TransformationResult
 
 ```java
 public record TransformationResult(
@@ -745,7 +781,7 @@ public record TransformationResult(
 }
 ```
 
-### 4.5 BatchResult
+### 4.6 BatchResult
 
 ```java
 public record BatchResult(
@@ -759,7 +795,7 @@ public record BatchResult(
 }
 ```
 
-### 4.6 OpenHimResponse
+### 4.7 OpenHimResponse
 
 ```java
 @Builder

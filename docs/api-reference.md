@@ -77,7 +77,7 @@ POST /inbound/ebuzima
       },
       "response": {
         "status": 202,
-        "body": "{\"data\":{\"status\":\"accepted\"}}",
+        "body": "{\"data\":{\"eventId\":\"evt-uuid\",\"status\":\"accepted\",\"correlationId\":\"corr-uuid\",\"timestamp\":\"2026-02-25T08:00:04.500Z\"}}",
         "timestamp": "2026-02-25T08:00:04.500Z"
       }
     }

@@ -189,8 +189,10 @@ The admin adds the following route to the existing eBUZIMA channel via the OpenH
 ```json
 {
   "data": {
-    "id": "evt-uuid",
-    "status": "accepted"
+    "eventId": "evt-uuid",
+    "status": "accepted",
+    "correlationId": "corr-uuid",
+    "timestamp": "2026-02-25T08:00:04.500Z"
   }
 }
 ```
@@ -200,9 +202,10 @@ The admin adds the following route to the existing eBUZIMA channel via the OpenH
 ```json
 {
   "data": {
-    "id": "evt-uuid",
+    "eventId": "evt-uuid",
     "status": "duplicate",
-    "message": "Event already processed"
+    "correlationId": "corr-uuid",
+    "timestamp": "2026-02-25T08:00:04.500Z"
   }
 }
 ```
@@ -212,7 +215,7 @@ The admin adds the following route to the existing eBUZIMA channel via the OpenH
 ```json
 {
   "error": {
-    "code": "VALIDATION_FAILED",
+    "code": "VALIDATION_ERROR",
     "message": "Missing required field: type"
   }
 }
@@ -246,7 +249,7 @@ The admin adds the following route to the existing eBUZIMA channel via the OpenH
 | `response.body` | String | Response body (stringified) |
 | `response.timestamp` | String | When response was received |
 
-## 7. Event Type Mapping
+## 7. Sample Event Type Mapping
 
 ### 7.1 FHIR Resource → CloudEvent Type
 

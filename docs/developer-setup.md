@@ -341,8 +341,10 @@ Create `wiremock/mappings/collector-events.json`:
     },
     "jsonBody": {
       "data": {
-        "id": "{{randomValue type='UUID'}}",
-        "status": "accepted"
+        "eventId": "{{randomValue type='UUID'}}",
+        "status": "accepted",
+        "correlationId": "corr-{{randomValue type='UUID'}}",
+        "timestamp": "{{now}}"
       }
     },
     "transformers": ["response-template"]

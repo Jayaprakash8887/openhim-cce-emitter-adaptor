@@ -67,6 +67,7 @@ The adaptor outputs CloudEvents v1.0-compliant JSON to the CCE Collector.
 | **X-Facility-Id** | Header (optional) | Facility FOSA ID |
 | **X-Source-Event-Id** | Header (optional) | Source system's event ID |
 | **X-Correlation-Id** | Header (optional) | Trace ID for cross-service correlation |
+| **Authorization** | Header | Auth credentials from source system, forwarded via OpenHIM. Passed through to CCE Collector. |
 | **URL Path** | Request URI | Used for adaptor selection: `/inbound/ebuzima` or `/inbound` |
 
 ### 2.2 InboundRequest Fields
@@ -88,6 +89,7 @@ The adaptor outputs CloudEvents v1.0-compliant JSON to the CCE Collector.
 | `correlationId` | String | `X-Correlation-Id` header | Nullable |
 | `eventTime` | OffsetDateTime | `Instant.now(ZoneOffset.UTC)` | When the adaptor received the event |
 | `sourcePath` | String | Request URI path | e.g., `/inbound/ebuzima` |
+| `authorizationHeader` | String | `Authorization` header | Passed through to Collector forwarding. Nullable |
 
 ## 3. Configuration Properties
 

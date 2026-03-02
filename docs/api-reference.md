@@ -297,6 +297,7 @@ Content-Type: application/json
 
 ```
 POST <collector-url>/v1/events
+Authorization: <passed through from inbound request>
 Content-Type: application/json
 
 {

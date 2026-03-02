@@ -478,6 +478,7 @@ public class CollectorForwardingService {
         try {
             ResponseEntity<String> response = collectorRestClient.post()
                 .uri(properties.eventsPath())
+                .header(HttpHeaders.AUTHORIZATION, event.getAuthorizationHeader())
                 .body(event)
                 .retrieve()
                 .toEntity(String.class);
@@ -551,7 +552,9 @@ public abstract class AbstractSourceAdaptor implements SourceAdaptor {
         String patientUpid = patientIdExtractor.extract(resource);
         String fhirJson = fhirContext.newJsonParser().encodeResourceToString(resource);
 
-        return cloudEventBuilder.build(fhirJson, patientUpid, cceType, meta);
+        CloudEventDto dto = cloudEventBuilder.build(fhirJson, patientUpid, cceType, meta);
+        dto.setAuthorizationHeader(meta.authorizationHeader());
+        return dto;
     }
 }
 ```
@@ -663,6 +666,9 @@ public class CloudEventDto {
     private String actionid;            // Usually null
     private Object data;                // FHIR R4 resource JSON
 
+    @JsonIgnore
+    private String authorizationHeader; // Passed through from inbound request (not serialized to JSON)
+
     // Getters, setters, builder
 }
 ```
@@ -682,10 +688,12 @@ public class InboundRequest {
         String facilityId = headers.get("x-facility-id");
         String correlationId = headers.get("x-correlation-id");
         String sourceEventId = headers.get("x-source-event-id");
+        String authorization = headers.get("authorization");
 
         SourceMetadata meta = new SourceMetadata(
             sourceSystem, facilityId, sourceEventId,
-            correlationId, OffsetDateTime.now(ZoneOffset.UTC), path);
+            correlationId, OffsetDateTime.now(ZoneOffset.UTC), path,
+            authorization);
 
         return new InboundRequest(body, headers, path, meta);
     }
@@ -710,7 +718,8 @@ public record SourceMetadata(
     String sourceEventId,
     String correlationId,
     OffsetDateTime eventTime,
-    String sourcePath
+    String sourcePath,
+    String authorizationHeader  // Passed through to Collector forwarding
 ) {}
 ```
 

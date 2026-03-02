@@ -221,6 +221,7 @@ public class CollectorForwardingService {
         return collectorClient.post()
             .uri(properties.getEventsPath())
             .contentType(MediaType.APPLICATION_JSON)
+            .header(HttpHeaders.AUTHORIZATION, event.getAuthorizationHeader())
             .body(event)
             .retrieve()
             .body(CollectorResponse.class);
@@ -295,5 +296,5 @@ public class CollectorForwardingService {
 |---------|-----------|
 | **OpenHIM ↔ Mediator** | OpenHIM Core routes requests; mediator trusts OpenHIM channel auth |
 | **Mediator → OpenHIM Core API** | Basic auth (`root@openhim.org` / password) for registration + heartbeat |
-| **Mediator → CCE Collector** | Via CCE Gateway (OAuth scope: `events:write`) — token managed externally or passed through |
+| **Mediator → CCE Collector** | Authorization header passed through from inbound request (originated by source system, forwarded via OpenHIM). CCE Gateway validates the token (OAuth scope: `events:write`). |
 | **TLS** | HTTPS connections configurable via Spring Boot `server.ssl.*` properties |

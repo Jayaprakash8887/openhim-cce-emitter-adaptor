@@ -1,4 +1,4 @@
-# CCE Emitter Adaptor — Flow Diagrams
+![alt text](image.png)# CCE Emitter Adaptor — Flow Diagrams
 
 All diagrams use Mermaid notation.
 
@@ -19,7 +19,7 @@ flowchart LR
         SA[EbuzimaSource<br/>Adaptor]
         MAPPER[eBUZIMA Payload<br/>Mapper]
         NORM[CloudEvent<br/>Builder]
-        FWD[Collector<br/>Forwarding<br/>@Retryable]
+        FWD["Collector<br/>Forwarding<br/>@Retryable"]
         WRAP[OpenHIM<br/>ResponseWrapper]
     end
 
@@ -282,8 +282,8 @@ flowchart TD
     HB[HeartbeatScheduler]
     DC[DynamicConfigService]
 
-    FC[FhirConfig<br/>@Bean FhirContext]
-    RC[RestClientConfig<br/>@Bean RestClient]
+    FC["FhirConfig<br/>@Bean FhirContext"]
+    RC["RestClientConfig<br/>@Bean RestClient"]
 
     CTRL --> NORM
     CTRL --> FWD

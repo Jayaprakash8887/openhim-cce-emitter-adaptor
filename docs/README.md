@@ -68,9 +68,6 @@ eBUZIMA EMR → OpenHIM Core → Emitter Adaptor → CCE Collector → Kafka
 | `HeartbeatScheduler` | `@Scheduled` — periodic heartbeat + dynamic config sync |
 | `OpenHimResponseWrapper` | Wraps responses in `application/json+openhim` format |
 
-## Collector Validation
-
-The CCE Collector validates **only the `type` field** as mandatory. All other CloudEvent fields are adaptor-populated for downstream correctness but are not enforced at the Collector boundary.
 
 ## Project Structure
 
@@ -93,13 +90,13 @@ src/main/java/org/openphc/cce/emitter/
 
 | Document | Description |
 |----------|-------------|
-| [Architecture Overview](docs/architecture-overview.md) | System context, tech stack, package structure |
-| [High-Level Design](docs/high-level-design.md) | Subsystem decomposition, processing pipeline |
-| [Low-Level Design](docs/low-level-design.md) | Detailed class implementations |
-| [Developer Setup](docs/developer-setup.md) | Build, run, Docker Compose |
-| [Data Dictionary](docs/data-dictionary.md) | Field definitions, configuration properties |
-| [API Reference](docs/api-reference.md) | All endpoints, request/response examples |
-| [Flow Diagrams](docs/flow-diagrams.md) | Mermaid sequence & flow diagrams |
+| [Architecture Overview](architecture-overview.md) | System context, tech stack, package structure |
+| [High-Level Design](high-level-design.md) | Subsystem decomposition, processing pipeline |
+| [Low-Level Design](low-level-design.md) | Detailed class implementations |
+| [Developer Setup](developer-setup.md) | Build, run, Docker Compose |
+| [Data Dictionary](data-dictionary.md) | Field definitions, configuration properties |
+| [API Reference](api-reference.md) | All endpoints, request/response examples |
+| [Flow Diagrams](flow-diagrams.md) | Mermaid sequence & flow diagrams |
 
 ## Endpoints
 

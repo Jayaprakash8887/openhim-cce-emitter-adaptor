@@ -1,0 +1,1 @@
+# openhim-cce-emitter-adaptor

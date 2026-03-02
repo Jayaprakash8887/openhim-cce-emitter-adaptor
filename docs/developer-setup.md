@@ -61,7 +61,8 @@ emitter-adaptor/
 │   └── test/
 │       ├── java/org/openphc/cce/emitter/
 │       └── resources/
-│           └── fhir/              # FHIR test fixtures
+│           ├── fhir/              # FHIR test fixtures
+│           └── ebuzima/           # eBUZIMA test fixtures
 ├── docs/
 ├── .github/
 │   └── copilot-instructions.md
@@ -387,17 +388,17 @@ curl -s http://localhost:8082/actuator/prometheus | grep cce_emitter
 ### Send a Test Event
 
 ```bash
-curl -X POST http://localhost:8082/inbound/fhir \
+curl -X POST http://localhost:8082/inbound/ebuzima \
   -H "Content-Type: application/json" \
-  -H "X-Source-System: rhie" \
+  -H "X-Source-System: ebuzima" \
   -H "X-Facility-Id: FAC-001" \
   -d '{
-    "resourceType": "Encounter",
-    "id": "enc-001",
-    "status": "finished",
-    "class": {"code": "AMB"},
-    "subject": {"reference": "Patient/PAT-12345"},
-    "period": {"start": "2026-02-25T08:00:00Z"}
+    "visitId": "ebz-visit-001",
+    "patientUpid": "PAT-12345",
+    "visitDate": "2026-02-25T08:00:00Z",
+    "facilityId": "FAC-001",
+    "visitType": "CLINICAL_VISIT",
+    "status": "completed"
   }'
 ```
 

@@ -2,11 +2,11 @@
 
 ## 1. Purpose
 
-The Emitter Adaptor is an **OpenHIM mediator** built as a standalone **Spring Boot 3.x** application. It serves as the bridge between external clinical source systems (EHR, RHIE, CHW apps, Lab systems) and the CCE platform. It is responsible for:
+The Emitter Adaptor is an **OpenHIM mediator** built as a standalone **Spring Boot 3.x** application. It serves as the bridge between the **eBUZIMA EMR** and the CCE platform. It is responsible for:
 
-1. **Receiving** raw clinical data from source systems via OpenHIM Core routing
-2. **Normalizing** event types to the `org.openphc.cce.<resource>` format
-3. **Mapping** source payloads to FHIR R4 resources (when not already FHIR-compliant)
+1. **Receiving** eBUZIMA clinical visit data via OpenHIM Core routing
+2. **Mapping** eBUZIMA-native JSON payloads to FHIR R4 resources
+3. **Normalizing** event types to the `org.openphc.cce.<resource>` format
 4. **Constructing** CloudEvents v1.0 envelopes with CCE-required fields and extensions
 5. **Forwarding** the normalized CloudEvents to the CCE Collector Service via `RestClient`
 
@@ -16,11 +16,11 @@ The Collector performs **minimal validation** — only the `type` field must be 
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    External Source Systems                    │
-│  eBUZIMA EMR  │  SmartCare  │  CHW App  │  Lab Systems      │
-└──────┬────────┴──────┬──────┴─────┬─────┴──────┬────────────┘
-       │               │            │            │
-       ▼               ▼            ▼            ▼
+│                    eBUZIMA EMR                                │
+│            (Clinical visits, observations, etc.)             │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                           ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    OpenHIM Core (RHIE)                        │
 │   Channel routing, transaction logging, access control       │
@@ -32,13 +32,12 @@ The Collector performs **minimal validation** — only the `type` field must be 
 │   Spring Boot 3.4.x + HAPI FHIR 7.4.0                       │
 │                                                              │
 │  1. @RestController receives HTTP POST                       │
-│  2. Identify source system from request context              │
-│  3. Delegate to source-specific adaptor (@Component)         │
-│  4. Parse/map source payload → FHIR R4 resource              │
-│  5. Normalize event type → org.openphc.cce.<resource>        │
-│  6. Build CloudEvents v1.0 envelope                          │
-│  7. Forward via RestClient to CCE Collector                  │
-│  8. Wrap response in OpenHIM mediator format                 │
+│  2. Parse eBUZIMA-native JSON payload                        │
+│  3. Map to FHIR R4 resources (Encounter, Observation, etc.) │
+│  4. Normalize event type → org.openphc.cce.<resource>        │
+│  5. Build CloudEvents v1.0 envelope                          │
+│  6. Forward via RestClient to CCE Collector                  │
+│  7. Wrap response in OpenHIM mediator format                 │
 └──────────────────────────┬──────────────────────────────────┘
                            │  HTTP POST (CloudEvents JSON)
                            ▼
@@ -65,8 +64,8 @@ The Collector performs **minimal validation** — only the `type` field must be 
 |-----------|-------------|
 | **Spring Boot Standard** | Standard Spring Boot application — embedded Tomcat, DI, `@ConfigurationProperties`, Actuator health/metrics |
 | **Stateless** | No local database; no session state; all context derived from inbound request |
-| **Single Responsibility** | Each source adaptor handles exactly one source system's format |
-| **Open/Closed** | New source systems added by implementing `SourceAdaptor` and annotating `@Component` — auto-discovered |
+| **Single Responsibility** | eBUZIMA adaptor handles eBUZIMA-specific format; extensible via `SourceAdaptor` interface |
+| **Open/Closed** | Future source systems can be added by implementing `SourceAdaptor` and annotating `@Component` — auto-discovered |
 | **Idempotent Output** | Same source event always produces the same CloudEvents `id` — Collector handles dedup |
 | **Fail-Fast** | Invalid/unmappable payloads rejected immediately with descriptive errors |
 | **Retry with Backoff** | Collector forwarding uses Spring Retry with exponential backoff on 5xx/timeout |
@@ -101,9 +100,8 @@ The OpenHIM mediator contract is implemented with plain Spring Boot components �
 │  ┌──────────────────┐  ┌─────────────────────────────┐   │
 │  │ Embedded Tomcat   │  │ @RestController (InboundCtrl)│   │
 │  │ port: 8082        │──│  POST /inbound               │   │
-│  │                   │  │  POST /inbound/fhir           │   │
-│  └──────────────────┘  │  POST /inbound/ebuzima         │   │
-│                         └─────────────────────────────┘   │
+│  │                   │  │  POST /inbound/ebuzima        │   │
+│  └──────────────────┘  └─────────────────────────────┘   │
 │  ┌──────────────────┐  ┌─────────────────────────────┐   │
 │  │ MediatorRegistrar │  │ HeartbeatScheduler           │   │
 │  │ (startup via      │  │ (@Scheduled, periodic POST   │   │
@@ -161,17 +159,9 @@ org.openphc.cce.emitter/
 │   ├── SourceAdaptor.java                         #   Interface: canHandle + adapt + getSourceIdentifier
 │   ├── SourceAdaptorRegistry.java                 #   Finds correct adaptor (injected List<SourceAdaptor>)
 │   ├── AbstractSourceAdaptor.java                 #   Base class with common FHIR + CloudEvents logic
-│   ├── rhie/
-│   │   └── RhieSourceAdaptor.java                 #   @Component: FHIR R4 passthrough
-│   ├── ebuzima/
-│   │   ├── EbuzimaSourceAdaptor.java              #   @Component: eBUZIMA JSON → FHIR R4
-│   │   └── EbuzimaPayloadMapper.java              #   Field-level mapping logic
-│   ├── smartcare/
-│   │   └── SmartCareSourceAdaptor.java            #   @Component: SmartCare handling
-│   ├── chw/
-│   │   └── ChwAppSourceAdaptor.java               #   @Component: CHW JSON → FHIR R4
-│   └── lab/
-│       └── LabSystemSourceAdaptor.java            #   @Component: Lab → Observation/DiagnosticReport
+│   └── ebuzima/
+│       ├── EbuzimaSourceAdaptor.java              #   @Component: eBUZIMA JSON → FHIR R4
+│       └── EbuzimaPayloadMapper.java              #   Field-level mapping logic
 │
 ├── cloudevents/                                   # CloudEvents envelope construction
 │   ├── CloudEventEnvelopeBuilder.java             #   Builds CloudEvents v1.0 JSON
@@ -208,7 +198,7 @@ org.openphc.cce.emitter/
     └── JsonUtil.java                              #   Jackson helpers
 ```
 
-**Estimated: ~35 source files** across 10 packages.
+**Estimated: ~28 source files** across 9 packages.
 
 ## 7. Key Interfaces
 
@@ -234,7 +224,7 @@ public class InboundEventController {
     private final CollectorForwardingService forwardingService;
     private final OpenHimResponseWrapper responseWrapper;
 
-    @PostMapping({"", "/fhir", "/ebuzima", "/smartcare", "/chw", "/lab"})
+    @PostMapping({"", "/ebuzima"})
     public ResponseEntity<?> handleInbound(
             @RequestBody String body,
             @RequestHeader Map<String, String> headers,
@@ -253,12 +243,8 @@ public class InboundEventController {
 
 | Direction | Protocol | Endpoint | Content |
 |-----------|----------|----------|---------|
-| **IN** | HTTP POST | `/inbound` | Source system payload (auto-detect) |
-| **IN** | HTTP POST | `/inbound/fhir` | FHIR R4 resources (RHIE passthrough) |
-| **IN** | HTTP POST | `/inbound/ebuzima` | eBUZIMA-native JSON |
-| **IN** | HTTP POST | `/inbound/smartcare` | SmartCare payload |
-| **IN** | HTTP POST | `/inbound/chw` | CHW app payload |
-| **IN** | HTTP POST | `/inbound/lab` | Lab system payload |
+| **IN** | HTTP POST | `/inbound` | eBUZIMA payload (auto-detect) |
+| **IN** | HTTP POST | `/inbound/ebuzima` | eBUZIMA-native JSON (explicit path) |
 
 ### 8.2 Outbound (to CCE Collector)
 

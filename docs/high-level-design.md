@@ -24,12 +24,10 @@ The Emitter Adaptor is a standard **Spring Boot 3.x** microservice that implemen
 │  ┌────────────────────┐  │ EventNormalizationService          │    │
 │  │ Source Adaptors     │  │   ↓ (build CloudEvent envelope)   │    │
 │  │                     │  │ CollectorForwardingService         │    │
-│  │ • RhieAdaptor       │  │   ↓ (POST via RestClient)         │    │
-│  │ • EbuzimaAdaptor    │  │ OpenHimResponseWrapper             │    │
-│  │ • SmartCareAdaptor  │  │   ↓ (wrap in openhim format)      │    │
-│  │ • ChwAppAdaptor     │  └──────────────────────────────────┘    │
-│  │ • LabAdaptor        │                                          │
-│  └────────────────────┘  ┌──────────────────────────────────┐    │
+│  │ • EbuzimaAdaptor    │  │   ↓ (POST via RestClient)         │    │
+│  │                     │  │ OpenHimResponseWrapper             │    │
+│  │                     │  │   ↓ (wrap in openhim format)      │    │
+│  └────────────────────┘  └──────────────────────────────────┘    │
 │                           │ Observability                     │    │
 │  ┌────────────────────┐  │                                   │    │
 │  │ Configuration       │  │ • Actuator (health, readiness)   │    │
@@ -47,7 +45,7 @@ The Emitter Adaptor is a standard **Spring Boot 3.x** microservice that implemen
 |-----------|-----------|----------------|
 | **OpenHIM Integration** | `MediatorRegistrar`, `HeartbeatScheduler`, `DynamicConfigService`, `OpenHimResponseWrapper` | Mediator lifecycle: register on startup, heartbeat for health + config sync, wrap responses in OpenHIM format |
 | **Request Processing** | `InboundEventController`, `EventNormalizationService`, `CollectorForwardingService` | Receive HTTP → transform → forward pipeline |
-| **Source Adaptors** | `SourceAdaptor` implementations (one per source system) | Source-specific payload parsing and FHIR R4 mapping |
+| **Source Adaptors** | `EbuzimaSourceAdaptor` (+ `SourceAdaptor` interface for extensibility) | eBUZIMA payload parsing and FHIR R4 mapping |
 | **Configuration** | `OpenHimProperties`, `CollectorProperties`, `FhirConfig`, `RestClientConfig` | Type-safe Spring configuration, `RestClient` beans, `FhirContext` singleton |
 | **Observability** | Spring Boot Actuator, Micrometer counters/timers, structured logging | Health probes, Prometheus metrics, JSON log output |
 
@@ -66,14 +64,14 @@ sequenceDiagram
     participant Col as CCE Collector
     participant Wrap as OpenHimResponseWrapper
 
-    OHC->>Ctrl: POST /inbound (raw payload)
+    OHC->>Ctrl: POST /inbound/ebuzima (eBUZIMA payload)
 
     Ctrl->>Ctrl: Build InboundRequest (body + headers + path)
     Ctrl->>Reg: findAdaptor(inboundRequest)
     Reg-->>Ctrl: matching SourceAdaptor
 
     Ctrl->>SA: adapt(inboundRequest)
-    Note over SA: Parse payload<br/>Map to FHIR R4<br/>Extract patient UPID<br/>Normalize event type<br/>Build CloudEvent(s)
+    Note over SA: Parse eBUZIMA payload<br/>Map to FHIR R4<br/>Extract patient UPID<br/>Normalize event type<br/>Build CloudEvent(s)
     SA-->>Ctrl: List<CloudEventDto>
 
     loop For each CloudEvent
@@ -96,7 +94,7 @@ sequenceDiagram
 | 1 | `InboundEventController` | Receives HTTP POST, extracts body, headers, path |
 | 2 | `InboundRequest.from()` | Wraps raw data into domain object with `SourceMetadata` |
 | 3 | `SourceAdaptorRegistry.findAdaptor()` | Iterates registered `@Component` adaptors; first `canHandle()` match wins |
-| 4 | `SourceAdaptor.adapt()` | Parses source payload, maps to FHIR R4, builds `List<CloudEventDto>` |
+| 4 | `SourceAdaptor.adapt()` | Parses eBUZIMA payload, maps to FHIR R4, builds `List<CloudEventDto>` |
 | 5 | `CollectorForwardingService.forward()` | POSTs each CloudEvent to Collector via `RestClient`; `@Retryable` on 5xx |
 | 6 | `OpenHimResponseWrapper.wrap()` | Wraps response + orchestration log in `application/json+openhim` format |
 | 7 | Controller returns | `ResponseEntity` with OpenHIM envelope |
@@ -178,7 +176,7 @@ Every response from the adaptor is wrapped in the OpenHIM mediator response form
 
 ### 5.1 Adaptor Discovery
 
-All `SourceAdaptor` implementations are Spring `@Component` beans. `SourceAdaptorRegistry` receives them via `@Autowired List<SourceAdaptor>`, ordered by `@Order` annotation. `RhieSourceAdaptor` has the lowest priority (fallback).
+All `SourceAdaptor` implementations are Spring `@Component` beans. `SourceAdaptorRegistry` receives them via `@Autowired List<SourceAdaptor>`, ordered by `@Order` annotation. Currently, only `EbuzimaSourceAdaptor` is implemented. Additional source systems can be supported by adding new `SourceAdaptor` implementations.
 
 ### 5.2 Adaptor Selection
 
@@ -187,18 +185,12 @@ flowchart TD
     A[Incoming Request] --> B{X-Source-System header?}
 
     B -->|ebuzima| C[EbuzimaSourceAdaptor]
-    B -->|smartcare| D[SmartCareSourceAdaptor]
-    B -->|chw| E[ChwAppSourceAdaptor]
-    B -->|lab| F[LabSystemSourceAdaptor]
     B -->|not set| G{Check URL path}
 
     G -->|/inbound/ebuzima| C
-    G -->|/inbound/smartcare| D
-    G -->|/inbound/chw| E
-    G -->|/inbound/lab| F
-    G -->|/inbound or /inbound/fhir| H{Contains resourceType?}
+    G -->|/inbound| H{eBUZIMA payload detected?}
 
-    H -->|Yes| I[RhieSourceAdaptor<br/>FHIR passthrough]
+    H -->|Yes| C
     H -->|No| J[SourceNotRecognizedException<br/>400 Bad Request]
 ```
 
@@ -206,11 +198,7 @@ flowchart TD
 
 | Source | Mapping Complexity | Output |
 |--------|-------------------|--------|
-| RHIE | Passthrough — already FHIR R4 | Same resource, extracted from Bundle if needed |
 | eBUZIMA | Complex mapping — `EbuzimaPayloadMapper` | Encounter + Observations + Immunizations |
-| SmartCare | Moderate — HL7v2/FHIR normalization | Standard FHIR R4 resources |
-| CHW App | Moderate mapping — simplified JSON | FHIR R4 Encounter + Observations |
-| Lab | Moderate mapping | FHIR DiagnosticReport + Observations |
 
 ## 6. Collector Forwarding Subsystem
 

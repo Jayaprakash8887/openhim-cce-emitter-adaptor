@@ -7,11 +7,7 @@ All diagrams use Mermaid notation.
 ```mermaid
 flowchart LR
     subgraph Sources
-        RHIE[RHIE<br/>FHIR R4]
-        EBZ[eBUZIMA<br/>Custom JSON]
-        SC[SmartCare]
-        CHW[CHW App]
-        LAB[Lab]
+        EBZ[eBUZIMA EMR<br/>Custom JSON]
     end
 
     subgraph OpenHIM
@@ -20,8 +16,8 @@ flowchart LR
 
     subgraph "CCE Emitter Adaptor (Spring Boot)"
         CTRL[InboundEvent<br/>Controller]
-        REG[SourceAdaptor<br/>Registry]
-        SA[SourceAdaptor<br/>adapt]
+        SA[EbuzimaSource<br/>Adaptor]
+        MAPPER[eBUZIMA Payload<br/>Mapper]
         NORM[CloudEvent<br/>Builder]
         FWD[Collector<br/>Forwarding<br/>@Retryable]
         WRAP[OpenHIM<br/>ResponseWrapper]
@@ -32,16 +28,12 @@ flowchart LR
         KAFKA[Kafka<br/>cce.events.inbound]
     end
 
-    RHIE -->|FHIR JSON| OHC
     EBZ -->|Custom JSON| OHC
-    SC --> OHC
-    CHW --> OHC
-    LAB --> OHC
 
     OHC -->|Route to mediator| CTRL
-    CTRL --> REG
-    REG --> SA
-    SA --> NORM
+    CTRL --> SA
+    SA --> MAPPER
+    MAPPER --> NORM
     NORM --> FWD
     FWD -->|POST /v1/events| COL
     COL --> KAFKA
@@ -103,54 +95,41 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    A[POST /inbound/**] --> B{X-Source-System<br/>header present?}
+    A[POST /inbound or /inbound/ebuzima] --> B{X-Source-System<br/>header present?}
 
-    B -->|"ebuzima"| C[EbuzimaSourceAdaptor<br/>@Order 10]
-    B -->|"smartcare"| D[SmartCareSourceAdaptor<br/>@Order 20]
-    B -->|"chw"| E[ChwAppSourceAdaptor<br/>@Order 30]
-    B -->|"lab"| F[LabSystemSourceAdaptor<br/>@Order 40]
+    B -->|"ebuzima"| C[EbuzimaSourceAdaptor]
     B -->|not set| G{URL Path?}
 
     G -->|/inbound/ebuzima| C
-    G -->|/inbound/smartcare| D
-    G -->|/inbound/chw| E
-    G -->|/inbound/lab| F
-    G -->|"/inbound or /inbound/fhir"| H{Body contains<br/>resourceType?}
+    G -->|/inbound| H{eBUZIMA payload<br/>detected?}
 
-    H -->|Yes| I[RhieSourceAdaptor<br/>@Order 100<br/>FHIR Passthrough]
+    H -->|Yes| C
     H -->|No| J[SourceNotRecognized<br/>Exception → 400]
 
     style C fill:#e1f5fe
-    style D fill:#e1f5fe
-    style E fill:#e1f5fe
-    style F fill:#e1f5fe
-    style I fill:#e8f5e9
     style J fill:#ffebee
 ```
 
-## 4. FHIR Bundle Expansion
+## 4. eBUZIMA Payload Expansion
 
 ```mermaid
 flowchart TD
-    A[Incoming FHIR JSON] --> B{resourceType?}
+    A[Incoming eBUZIMA JSON] --> B[EbuzimaPayloadMapper]
 
-    B -->|Bundle| C[Extract entries]
-    B -->|Single Resource| D[Wrap as single CloudEvent]
+    B --> C[FHIR Encounter<br/>from visit data]
+    B --> D[FHIR Observation 1<br/>from clinical obs]
+    B --> E[FHIR Observation 2<br/>from vital signs]
+    B --> F[FHIR Immunization<br/>if vaccination data present]
 
-    C --> E[entry 0: Encounter]
-    C --> F[entry 1: Observation]
-    C --> G[entry 2: Observation]
+    C --> G[CloudEvent 1<br/>type: org.openphc.cce.encounter]
+    D --> H[CloudEvent 2<br/>type: org.openphc.cce.observation]
+    E --> I[CloudEvent 3<br/>type: org.openphc.cce.observation]
+    F --> J[CloudEvent 4<br/>type: org.openphc.cce.immunization]
 
-    E --> H[CloudEvent 1<br/>type: org.openphc.cce.encounter]
-    F --> I[CloudEvent 2<br/>type: org.openphc.cce.observation]
-    G --> J[CloudEvent 3<br/>type: org.openphc.cce.observation]
-
-    D --> K[CloudEvent<br/>type: org.openphc.cce.encounter]
-
-    H --> L[Forward each to Collector]
-    I --> L
-    J --> L
-    K --> L
+    G --> K[Forward each to Collector]
+    H --> K
+    I --> K
+    J --> K
 ```
 
 ## 5. Collector Forwarding with Retry
@@ -290,11 +269,8 @@ flowchart TD
     FWD[CollectorForwardingService]
     WRAP[OpenHimResponseWrapper]
 
-    SA_RHIE[RhieSourceAdaptor]
     SA_EBZ[EbuzimaSourceAdaptor]
-    SA_SC[SmartCareSourceAdaptor]
-    SA_CHW[ChwAppSourceAdaptor]
-    SA_LAB[LabSystemSourceAdaptor]
+    MAPPER[EbuzimaPayloadMapper]
 
     CE[CloudEventEnvelopeBuilder]
     ETN[EventTypeNormalizer]
@@ -314,14 +290,9 @@ flowchart TD
     CTRL --> WRAP
 
     NORM --> REG
-    REG --> SA_RHIE
     REG --> SA_EBZ
-    REG --> SA_SC
-    REG --> SA_CHW
-    REG --> SA_LAB
 
-    SA_RHIE --> CE
-    SA_RHIE --> PIE
+    SA_EBZ --> MAPPER
     SA_EBZ --> CE
     SA_EBZ --> PIE
 
@@ -333,7 +304,6 @@ flowchart TD
     HB --> RC
     HB --> DC
 
-    SA_RHIE --> FC
     SA_EBZ --> FC
     FRP --> FC
 
@@ -350,9 +320,7 @@ flowchart TD
 ```mermaid
 flowchart LR
     subgraph "External Sources"
-        A1[RHIE]
-        A2[eBUZIMA]
-        A3[SmartCare]
+        A2[eBUZIMA EMR]
     end
 
     subgraph "OpenHIM"
@@ -371,9 +339,7 @@ flowchart LR
         KAFKA[Kafka]
     end
 
-    A1 --> OHC
     A2 --> OHC
-    A3 --> OHC
 
     OHC -->|"Route /inbound/**"| EA
     EA -->|"Register + heartbeat"| OHC_API

@@ -11,54 +11,22 @@
 
 ## 2. Inbound Event Endpoints
 
-All inbound endpoints share the same controller logic (`InboundEventController`). The URL path determines adaptor selection.
+All inbound endpoints share the same controller logic (`InboundEventController`). This adaptor is dedicated to eBUZIMA.
 
 ### 2.1 POST /inbound
 
-Generic inbound endpoint. Adaptor selection based on `X-Source-System` header or payload inspection.
+Generic inbound endpoint. Routes to `EbuzimaSourceAdaptor` when `X-Source-System: ebuzima` header is present or eBUZIMA payload is detected.
 
 ```
 POST /inbound
 ```
 
-### 2.2 POST /inbound/fhir
+### 2.2 POST /inbound/ebuzima
 
-FHIR passthrough — assumes FHIR R4 JSON. Uses `RhieSourceAdaptor`.
-
-```
-POST /inbound/fhir
-```
-
-### 2.3 POST /inbound/ebuzima
-
-eBUZIMA clinical visit data. Uses `EbuzimaSourceAdaptor`.
+eBUZIMA clinical visit data (explicit path). Uses `EbuzimaSourceAdaptor`.
 
 ```
 POST /inbound/ebuzima
-```
-
-### 2.4 POST /inbound/smartcare
-
-SmartCare system data. Uses `SmartCareSourceAdaptor`.
-
-```
-POST /inbound/smartcare
-```
-
-### 2.5 POST /inbound/chw
-
-Community Health Worker app data. Uses `ChwAppSourceAdaptor`.
-
-```
-POST /inbound/chw
-```
-
-### 2.6 POST /inbound/lab
-
-Laboratory system data. Uses `LabSystemSourceAdaptor`.
-
-```
-POST /inbound/lab
 ```
 
 ---
@@ -69,17 +37,13 @@ POST /inbound/lab
 
 | Header | Required | Description |
 |--------|----------|-------------|
-| `Content-Type` | Yes | `application/json` or `application/fhir+json` |
-| `X-Source-System` | No | Source identifier: `rhie`, `ebuzima`, `smartcare`, `chw`, `lab`. Overrides path-based selection. |
+| `Content-Type` | Yes | `application/json` |
+| `X-Source-System` | No | Source identifier: `ebuzima`. Defaults to eBUZIMA if absent. |
 | `X-Facility-Id` | No | Facility FOSA ID |
 | `X-Source-Event-Id` | No | Source system's original event ID |
 | `X-Correlation-Id` | No | Cross-service trace ID |
 
-**Body:** Raw JSON payload from the source system. Structure depends on the source:
-
-- **RHIE / FHIR passthrough:** FHIR R4 resource or Bundle JSON
-- **eBUZIMA:** eBUZIMA-specific JSON payload
-- **SmartCare / CHW / Lab:** Source-specific JSON payload
+**Body:** eBUZIMA-native JSON payload (clinical visit data, observations, immunizations, etc.).
 
 ### Response Format (all inbound endpoints)
 
@@ -124,22 +88,22 @@ POST /inbound/lab
 
 ## 3. Request & Response Examples
 
-### 3.1 FHIR Encounter (Passthrough)
+### 3.1 eBUZIMA Clinical Visit
 
 **Request:**
 
 ```bash
-curl -X POST http://localhost:8082/inbound/fhir \
-  -H "Content-Type: application/fhir+json" \
-  -H "X-Source-System: rhie" \
+curl -X POST http://localhost:8082/inbound/ebuzima \
+  -H "Content-Type: application/json" \
+  -H "X-Source-System: ebuzima" \
   -H "X-Facility-Id: FAC-FOSA-001" \
   -d '{
-    "resourceType": "Encounter",
-    "id": "enc-001",
-    "status": "finished",
-    "class": {"code": "AMB"},
-    "subject": {"reference": "Patient/UPID-PAT-12345"},
-    "period": {"start": "2026-02-25T08:00:00Z"}
+    "visitId": "ebz-visit-9876",
+    "patientUpid": "UPID-PAT-12345",
+    "visitDate": "2026-02-25T08:00:00Z",
+    "facilityId": "FAC-FOSA-001",
+    "visitType": "CLINICAL_VISIT",
+    "status": "completed"
   }'
 ```
 
@@ -149,15 +113,16 @@ curl -X POST http://localhost:8082/inbound/fhir \
 {
   "specversion": "1.0",
   "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "source": "rhie-mediator",
+  "source": "ebuzima",
   "type": "org.openphc.cce.encounter",
   "subject": "UPID-PAT-12345",
   "time": "2026-02-25T08:00:00.000Z",
   "datacontenttype": "application/fhir+json",
   "facilityid": "FAC-FOSA-001",
+  "sourceeventid": "ebz-visit-9876",
   "data": {
     "resourceType": "Encounter",
-    "id": "enc-001",
+    "id": "enc-uuid-visit-kicukiro-001",
     "status": "finished",
     "class": {"code": "AMB"},
     "subject": {"reference": "Patient/UPID-PAT-12345"},
@@ -166,39 +131,9 @@ curl -X POST http://localhost:8082/inbound/fhir \
 }
 ```
 
-### 3.2 FHIR Bundle
+### 3.2 eBUZIMA Visit with Multiple Resources
 
-**Request:**
-
-```bash
-curl -X POST http://localhost:8082/inbound/fhir \
-  -H "Content-Type: application/fhir+json" \
-  -d '{
-    "resourceType": "Bundle",
-    "type": "transaction",
-    "entry": [
-      {
-        "resource": {
-          "resourceType": "Encounter",
-          "id": "enc-001",
-          "status": "finished",
-          "subject": {"reference": "Patient/PAT-001"}
-        }
-      },
-      {
-        "resource": {
-          "resourceType": "Observation",
-          "id": "obs-001",
-          "status": "final",
-          "subject": {"reference": "Patient/PAT-001"},
-          "code": {"coding": [{"system": "http://loinc.org", "code": "8480-6"}]}
-        }
-      }
-    ]
-  }'
-```
-
-**Result:** Two CloudEvents generated — one `org.openphc.cce.encounter`, one `org.openphc.cce.observation`. Both forwarded separately to Collector.
+**Result:** When an eBUZIMA clinical visit includes observations and immunizations, the `EbuzimaPayloadMapper` produces multiple FHIR R4 resources. Each is wrapped in a separate CloudEvent and forwarded individually to the Collector (e.g., one `org.openphc.cce.encounter` + one or more `org.openphc.cce.observation`).
 
 ---
 

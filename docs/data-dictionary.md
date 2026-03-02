@@ -63,13 +63,13 @@ The adaptor outputs CloudEvents v1.0-compliant JSON to the CCE Collector.
 
 | Element | Source | Description |
 |---------|--------|-------------|
-| **Body** | HTTP body | Raw JSON payload from the source system |
-| **Content-Type** | Header | Typically `application/json` or `application/fhir+json` |
-| **X-Source-System** | Header (optional) | Source system identifier (`ebuzima`, `rhie`, `smartcare`, `chw`, `lab`) |
+| **Body** | HTTP body | eBUZIMA JSON payload |
+| **Content-Type** | Header | `application/json` |
+| **X-Source-System** | Header (optional) | Source system identifier (`ebuzima`). Defaults to eBUZIMA if absent. |
 | **X-Facility-Id** | Header (optional) | Facility FOSA ID |
 | **X-Source-Event-Id** | Header (optional) | Source system's event ID |
 | **X-Correlation-Id** | Header (optional) | Trace ID for cross-service correlation |
-| **URL Path** | Request URI | Used for adaptor selection: `/inbound/ebuzima`, `/inbound/fhir`, etc. |
+| **URL Path** | Request URI | Used for adaptor selection: `/inbound/ebuzima` or `/inbound` |
 
 ### 2.2 InboundRequest Fields
 
@@ -84,7 +84,7 @@ The adaptor outputs CloudEvents v1.0-compliant JSON to the CCE Collector.
 
 | Field | Type | Source | Description |
 |-------|------|--------|-------------|
-| `sourceIdentifier` | String | `X-Source-System` header or path segment | e.g., `"ebuzima"`, `"rhie-mediator"` |
+| `sourceIdentifier` | String | `X-Source-System` header or path segment | e.g., `"ebuzima"` |
 | `facilityId` | String | `X-Facility-Id` header | Nullable |
 | `sourceEventId` | String | `X-Source-Event-Id` header | Nullable |
 | `correlationId` | String | `X-Correlation-Id` header | Nullable |
@@ -246,11 +246,7 @@ Prefix: `cce.collector`
 
 | Adaptor | `source` field value |
 |---------|---------------------|
-| RhieSourceAdaptor | `"rhie-mediator"` |
 | EbuzimaSourceAdaptor | `"ebuzima"` |
-| SmartCareSourceAdaptor | `"smartcare"` |
-| ChwAppSourceAdaptor | `"chw-app"` |
-| LabSystemSourceAdaptor | `"lab-system"` |
 
 ## 8. Metrics Reference
 

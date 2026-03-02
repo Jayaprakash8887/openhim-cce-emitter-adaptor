@@ -31,17 +31,9 @@ org.openphc.cce.emitter
 │   ├── SourceAdaptor.java                           # Interface: canHandle + adapt + getSourceIdentifier
 │   ├── SourceAdaptorRegistry.java                   # @Component: ordered list, first match wins
 │   ├── AbstractSourceAdaptor.java                   # Base: FHIR parsing, CloudEvent building
-│   ├── rhie/
-│   │   └── RhieSourceAdaptor.java                   # @Component @Order(100): FHIR passthrough
-│   ├── ebuzima/
-│   │   ├── EbuzimaSourceAdaptor.java                # @Component @Order(10): eBUZIMA → FHIR R4
-│   │   └── EbuzimaPayloadMapper.java                # Field-level mapping
-│   ├── smartcare/
-│   │   └── SmartCareSourceAdaptor.java              # @Component @Order(20): SmartCare
-│   ├── chw/
-│   │   └── ChwAppSourceAdaptor.java                 # @Component @Order(30): CHW app
-│   └── lab/
-│       └── LabSystemSourceAdaptor.java              # @Component @Order(40): Lab systems
+│   └── ebuzima/
+│       ├── EbuzimaSourceAdaptor.java                # @Component @Order(10): eBUZIMA → FHIR R4
+│       └── EbuzimaPayloadMapper.java                # Field-level mapping
 │
 ├── cloudevents/
 │   ├── CloudEventEnvelopeBuilder.java               # @Component: builds CloudEvents v1.0 JSON
@@ -78,7 +70,7 @@ org.openphc.cce.emitter
     └── JsonUtil.java                                # Jackson helpers
 ```
 
-**Total: ~35 source files** across 10 packages.
+**Total: ~28 source files** across 9 packages.
 
 ## 2. Class Relationships
 
@@ -127,7 +119,6 @@ classDiagram
         #buildCloudEvent(resource, meta): CloudEventDto
     }
 
-    class RhieSourceAdaptor
     class EbuzimaSourceAdaptor
 
     class MediatorRegistrar {
@@ -152,7 +143,6 @@ classDiagram
     EventNormalizationService --> SourceAdaptorRegistry
     SourceAdaptorRegistry --> SourceAdaptor
     AbstractSourceAdaptor ..|> SourceAdaptor
-    RhieSourceAdaptor --|> AbstractSourceAdaptor
     EbuzimaSourceAdaptor --|> AbstractSourceAdaptor
     HeartbeatScheduler --> DynamicConfigService
 ```
@@ -290,7 +280,7 @@ public class InboundEventController {
     private final CollectorForwardingService forwardingService;
     private final OpenHimResponseWrapper responseWrapper;
 
-    @PostMapping({"", "/fhir", "/ebuzima", "/smartcare", "/chw", "/lab"})
+    @PostMapping({"", "/ebuzima"})
     public ResponseEntity<OpenHimResponse> handleInbound(
             @RequestBody String body,
             @RequestHeader Map<String, String> headers,
@@ -566,53 +556,7 @@ public abstract class AbstractSourceAdaptor implements SourceAdaptor {
 }
 ```
 
-### 3.9 RhieSourceAdaptor
-
-```java
-@Component
-@Order(100) // lowest priority — fallback
-public class RhieSourceAdaptor extends AbstractSourceAdaptor {
-
-    public RhieSourceAdaptor(FhirContext fhirContext,
-                              EventTypeNormalizer normalizer,
-                              PatientIdExtractor extractor,
-                              CloudEventEnvelopeBuilder builder) {
-        super(fhirContext, normalizer, extractor, builder);
-    }
-
-    @Override
-    public boolean canHandle(InboundRequest request) {
-        return request.containsFhirResource();
-    }
-
-    @Override
-    public List<CloudEventDto> adapt(InboundRequest request) {
-        IBaseResource resource = fhirContext.newJsonParser()
-            .parseResource(request.getBody());
-
-        if (resource instanceof Bundle bundle) {
-            return adaptBundle(bundle, request.getMetadata());
-        }
-
-        return List.of(buildCloudEvent(resource, request.getMetadata()));
-    }
-
-    private List<CloudEventDto> adaptBundle(Bundle bundle, SourceMetadata meta) {
-        return bundle.getEntry().stream()
-            .map(Bundle.BundleEntryComponent::getResource)
-            .filter(Objects::nonNull)
-            .map(resource -> buildCloudEvent(resource, meta))
-            .toList();
-    }
-
-    @Override
-    public String getSourceIdentifier() {
-        return "rhie-mediator";
-    }
-}
-```
-
-### 3.10 EbuzimaSourceAdaptor
+### 3.9 EbuzimaSourceAdaptor
 
 ```java
 @Component
@@ -650,7 +594,7 @@ public class EbuzimaSourceAdaptor extends AbstractSourceAdaptor {
 }
 ```
 
-### 3.11 GlobalExceptionHandler
+### 3.10 GlobalExceptionHandler
 
 ```java
 @ControllerAdvice
@@ -940,16 +884,16 @@ class InboundEventControllerIntegrationTest {
     private TestRestTemplate restTemplate;
 
     @Test
-    void shouldForwardFhirEncounterToCollector() {
+    void shouldForwardEbuzimaVisitToCollector() {
         // Stub Collector
         stubFor(post(urlEqualTo("/v1/events"))
             .willReturn(aResponse().withStatus(202)
                 .withBody("{\"data\":{\"status\":\"accepted\"}}")));
 
-        String fhirJson = loadTestResource("fhir/encounter-visit.json");
+        String ebuzimaJson = loadTestResource("ebuzima/clinical-visit.json");
 
         ResponseEntity<String> response = restTemplate.postForEntity(
-            "/inbound/fhir", fhirJson, String.class);
+            "/inbound/ebuzima", ebuzimaJson, String.class);
 
         assertEquals(HttpStatus.ACCEPTED, response.getStatusCode());
         verify(postRequestedFor(urlEqualTo("/v1/events"))

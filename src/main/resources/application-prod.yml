@@ -1,0 +1,30 @@
+# Production profile — env-var driven config, structured JSON logging, heartbeat enabled
+openhim:
+  core:
+    host: ${OPENHIM_CORE_HOST}
+    api-port: ${OPENHIM_CORE_API_PORT:8080}
+    username: ${OPENHIM_USERNAME}
+    password: ${OPENHIM_PASSWORD}
+  heartbeat:
+    enabled: true
+    interval-seconds: ${OPENHIM_HEARTBEAT_INTERVAL:10}
+
+cce:
+  collector:
+    url: ${CCE_COLLECTOR_URL}
+    timeout: ${CCE_COLLECTOR_TIMEOUT:5000}
+  emitter:
+    sources:
+      ebuzima:
+        client-id: ${EBUZIMA_CLIENT_ID}
+
+logging:
+  level:
+    org.openphc.cce: INFO
+  pattern:
+    console: '{"timestamp":"%d{ISO8601}","level":"%level","logger":"%logger","message":"%msg"}%n'
+
+management:
+  endpoint:
+    health:
+      show-details: never

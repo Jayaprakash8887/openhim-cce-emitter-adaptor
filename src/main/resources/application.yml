@@ -1,0 +1,65 @@
+server:
+  port: 8082
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: cce-emitter-adaptor
+
+# OpenHIM Core Configuration
+openhim:
+  core:
+    host: localhost
+    api-port: 8080
+    username: root@openhim.org
+    password: openhim-password
+  mediator:
+    urn: "urn:mediator:cce-emitter-adaptor"
+    version: "1.0.0"
+    name: "CCE Emitter Adaptor"
+  heartbeat:
+    enabled: true
+    interval-seconds: 10
+
+# CCE Collector Configuration
+cce:
+  collector:
+    url: http://localhost:5001
+    events-path: /v1/events
+    timeout: 5000
+    retry:
+      max-attempts: 3
+      backoff-ms: 1000
+  emitter:
+    sources:
+      ebuzima:
+        client-id: ebuzima-emr-client
+
+# Actuator & Metrics
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+  health:
+    livenessState:
+      enabled: true
+    readinessState:
+      enabled: true
+  metrics:
+    tags:
+      application: cce-emitter-adaptor
+
+# Logging
+logging:
+  level:
+    org.openphc.cce: DEBUG
+    org.springframework.web: INFO
+  pattern:
+    console: "%d{ISO8601} [%thread] %-5level %logger{36} - %msg%n"

@@ -1,0 +1,21 @@
+# Development profile — heartbeat disabled, DEBUG logging, local URLs
+openhim:
+  core:
+    host: localhost
+    api-port: 8080
+    username: root@openhim.org
+    password: openhim-password
+  heartbeat:
+    enabled: false
+
+cce:
+  collector:
+    url: http://localhost:5001
+  emitter:
+    sources:
+      ebuzima:
+        client-id: ebuzima-emr-client
+
+logging:
+  level:
+    org.openphc.cce: DEBUG

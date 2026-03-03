@@ -9,44 +9,36 @@
 | **Content Type** | `application/json` |
 | **Response Format** | `application/json+openhim` (mediator response envelope) |
 
-## 2. Inbound Event Endpoints
+## 2. Inbound Event Endpoint
 
-All inbound endpoints share the same controller logic (`InboundEventController`). This adaptor is dedicated to eBUZIMA.
+The adaptor exposes a single inbound endpoint. Source system adaptor is selected based on request headers (`X-OpenHIM-ClientID`).
 
 ### 2.1 POST /inbound
 
-Generic inbound endpoint. Routes to `EbuzimaSourceAdaptor` when `X-OpenHIM-ClientID` or `X-Source-System` header matches the configured eBUZIMA client ID, or eBUZIMA payload is detected.
+Generic inbound endpoint. Routes to the matching `SourceAdaptor` based on `X-OpenHIM-ClientID` header (matched against configured client IDs).
 
 ```
 POST /inbound
 ```
 
-### 2.2 POST /inbound/ebuzima
-
-eBUZIMA clinical visit data (explicit path). Uses `EbuzimaSourceAdaptor`.
-
-```
-POST /inbound/ebuzima
-```
-
 ---
 
-### Request Format (all inbound endpoints)
+### Request Format
 
 **Headers:**
 
 | Header | Required | Description |
 |--------|----------|-------------|
 | `Content-Type` | Yes | `application/json` |
-| `X-OpenHIM-ClientID` | No | OpenHIM-authenticated client ID. Matched against configured `cce.emitter.sources.ebuzima.client-id` for adaptor routing. Automatically set by OpenHIM Core after client authentication. |
+| `X-OpenHIM-ClientID` | No | OpenHIM-authenticated client ID. Matched against configured source client IDs for adaptor routing. Automatically set by OpenHIM Core after client authentication. |
 | `X-Source-System` | No | Source system identifier (e.g., `ebuzima`). Fallback when `X-OpenHIM-ClientID` is absent. |
 | `X-Facility-Id` | No | Facility FOSA ID |
 | `X-Source-Event-Id` | No | Source system's original event ID |
 | `X-Correlation-Id` | No | Cross-service trace ID |
 
-**Body:** eBUZIMA-native JSON payload (clinical visit data, observations, immunizations, etc.).
+**Body:** FHIR R4 Bundle (`"resourceType": "Bundle"`) containing one or more resource entries.
 
-### Response Format (all inbound endpoints)
+### Response Format
 
 **Status:** `202 Accepted`
 
@@ -89,23 +81,39 @@ POST /inbound/ebuzima
 
 ## 3. Request & Response Examples
 
-### 3.1 eBUZIMA Clinical Visit
+### 3.1 eBUZIMA Clinical Visit (FHIR Bundle)
 
 **Request:**
 
 ```bash
-curl -X POST http://localhost:8082/inbound/ebuzima \
+curl -X POST http://localhost:8082/inbound \
   -H "Content-Type: application/json" \
   -H "X-OpenHIM-ClientID: ebuzima-emr-client" \
-  -H "X-Source-System: ebuzima" \
   -H "X-Facility-Id: FAC-FOSA-001" \
   -d '{
-    "visitId": "ebz-visit-9876",
-    "patientUpid": "UPID-PAT-12345",
-    "visitDate": "2026-02-25T08:00:00Z",
-    "facilityId": "FAC-FOSA-001",
-    "visitType": "CLINICAL_VISIT",
-    "status": "completed"
+    "resourceType": "Bundle",
+    "type": "searchset",
+    "total": 1,
+    "entry": [
+      {
+        "resource": {
+          "resourceType": "Encounter",
+          "id": "enc-uuid-visit-kicukiro-001",
+          "status": "finished",
+          "class": {
+            "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+            "code": "AMB",
+            "display": "ambulatory"
+          },
+          "subject": {
+            "reference": "Patient/UPID-PAT-12345"
+          },
+          "period": {
+            "start": "2026-02-25T08:00:00Z"
+          }
+        }
+      }
+    ]
   }'
 ```
 
@@ -121,7 +129,6 @@ curl -X POST http://localhost:8082/inbound/ebuzima \
   "time": "2026-02-25T08:00:00.000Z",
   "datacontenttype": "application/fhir+json",
   "facilityid": "FAC-FOSA-001",
-  "sourceeventid": "ebz-visit-9876",
   "data": {
     "resourceType": "Encounter",
     "id": "enc-uuid-visit-kicukiro-001",
@@ -133,9 +140,9 @@ curl -X POST http://localhost:8082/inbound/ebuzima \
 }
 ```
 
-### 3.2 eBUZIMA Visit with Multiple Resources
+### 3.2 FHIR Bundle with Multiple Resources
 
-**Result:** When an eBUZIMA clinical visit includes observations and immunizations, the `EbuzimaPayloadMapper` produces multiple FHIR R4 resources. Each is wrapped in a separate CloudEvent and forwarded individually to the Collector (e.g., one `org.openphc.cce.encounter` + one or more `org.openphc.cce.observation`).
+**Result:** When a FHIR Bundle contains multiple resource entries (e.g., Encounter + Observation), the adaptor extracts each resource from the Bundle. Each resource is wrapped in a separate CloudEvent and forwarded individually to the Collector.
 
 ---
 
@@ -159,23 +166,7 @@ Error responses are wrapped in the OpenHIM mediator envelope with `"status": "Fa
 }
 ```
 
-### 4.2 FHIR Mapping Error (422)
-
-```json
-{
-  "x-mediator-urn": "urn:mediator:cce-emitter-adaptor",
-  "status": "Failed",
-  "response": {
-    "status": 422,
-    "headers": {"Content-Type": "application/json"},
-    "body": "{\"error\":{\"code\":\"FHIR_MAPPING_ERROR\",\"message\":\"Failed to map eBUZIMA payload to FHIR Encounter\"}}",
-    "timestamp": "2026-02-25T08:00:05Z"
-  },
-  "orchestrations": []
-}
-```
-
-### 4.3 Patient ID Not Found (400)
+### 4.2 Patient ID Not Found (400)
 
 ```json
 {
@@ -191,7 +182,7 @@ Error responses are wrapped in the OpenHIM mediator envelope with `"status": "Fa
 }
 ```
 
-### 4.4 Collector Forwarding Failure (502)
+### 4.3 Collector Forwarding Failure (502)
 
 ```json
 {

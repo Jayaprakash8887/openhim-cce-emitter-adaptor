@@ -7,7 +7,7 @@ All diagrams use Mermaid notation.
 ```mermaid
 flowchart LR
     subgraph Sources
-        EBZ[eBUZIMA EMR<br/>Custom JSON]
+        EBZ[eBUZIMA EMR<br/>FHIR Bundle]
     end
 
     subgraph OpenHIM
@@ -16,8 +16,8 @@ flowchart LR
 
     subgraph "CCE Emitter Adaptor (Spring Boot)"
         CTRL[InboundEvent<br/>Controller]
-        SA[EbuzimaSource<br/>Adaptor]
-        MAPPER[eBUZIMA Payload<br/>Mapper]
+        SA[SourceAdaptor<br/>Registry]
+        PARSE[FHIR Bundle<br/>Parser]
         NORM[CloudEvent<br/>Builder]
         FWD["Collector<br/>Forwarding<br/>@Retryable"]
         WRAP[OpenHIM<br/>ResponseWrapper]
@@ -28,12 +28,12 @@ flowchart LR
         KAFKA[Kafka<br/>cce.events.inbound]
     end
 
-    EBZ -->|Custom JSON| OHC
+    EBZ -->|FHIR Bundle| OHC
 
-    OHC -->|Route to mediator| CTRL
+    OHC -->|"Secondary route<br/>(not primary path)"| CTRL
     CTRL --> SA
-    SA --> MAPPER
-    MAPPER --> NORM
+    SA --> PARSE
+    PARSE --> NORM
     NORM --> FWD
     FWD -->|POST /v1/events| COL
     COL --> KAFKA
@@ -55,7 +55,7 @@ sequenceDiagram
     participant Col as CCE Collector
     participant Wrap as OpenHimResponseWrapper
 
-    OHC->>Ctrl: POST /inbound/ebuzima (raw JSON)
+    OHC->>Ctrl: POST /inbound (FHIR Bundle)
     activate Ctrl
 
     Ctrl->>Ctrl: InboundRequest.from(body, headers, path)
@@ -67,11 +67,11 @@ sequenceDiagram
 
     Ctrl->>SA: adapt(inboundRequest)
     activate SA
-    SA->>SA: Parse eBUZIMA payload
-    SA->>SA: Map to FHIR R4 (Encounter + Observations)
-    SA->>CE: build(fhirJson, patientUpid, type, metadata)
+    SA->>SA: Parse FHIR Bundle
+    SA->>SA: Extract resource entries
+    SA->>CE: build(fhirResource, patientUpid, type, metadata)
     CE-->>SA: CloudEventDto
-    SA-->>Ctrl: List<CloudEventDto> (2 events)
+    SA-->>Ctrl: List<CloudEventDto> (per Bundle entry)
     deactivate SA
 
     loop Each CloudEvent
@@ -95,16 +95,13 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    A[POST /inbound or /inbound/ebuzima] --> B{X-OpenHIM-ClientID or<br/>X-Source-System<br/>matches eBUZIMA?}
+    A[POST /inbound] --> B{X-OpenHIM-ClientID<br/>matches configured<br/>source?}
 
-    B -->|Yes| C[EbuzimaSourceAdaptor]
-    B -->|No / not set| G{URL Path?}
+    B -->|Yes| C[Matching SourceAdaptor]
+    B -->|No / not set| G{X-Source-System<br/>header?}
 
-    G -->|/inbound/ebuzima| C
-    G -->|/inbound| H{eBUZIMA payload<br/>detected?}
-
-    H -->|Yes| C
-    H -->|No| J[SourceNotRecognized<br/>Exception → 400]
+    G -->|Matches known source| C
+    G -->|No match| J[SourceNotRecognized<br/>Exception → 400]
 
     style C fill:#e1f5fe
     style J fill:#ffebee
@@ -206,9 +203,9 @@ flowchart TD
     B -->|Yes| D{Adaptor found?}
 
     D -->|No| E[SourceNotRecognizedException<br/>→ 400 SOURCE_NOT_RECOGNIZED]
-    D -->|Yes| F{FHIR mapping OK?}
+    D -->|Yes| F{FHIR Bundle valid?}
 
-    F -->|No| G[FhirMappingException<br/>→ 422 FHIR_MAPPING_ERROR]
+    F -->|No| G[SourceAdaptorException<br/>→ 400 PAYLOAD_PARSE_ERROR]
     F -->|Yes| H{Patient ID found?}
 
     H -->|No| I[PatientIdNotFoundException<br/>→ 400 PATIENT_ID_NOT_FOUND]
@@ -243,13 +240,12 @@ flowchart TD
 ```mermaid
 flowchart TD
     CTRL[InboundEventController]
-    NORM[EventNormalizationService]
+    NORM[EventProcessingService]
     REG[SourceAdaptorRegistry]
     FWD[CollectorForwardingService]
     WRAP[OpenHimResponseWrapper]
 
     SA_EBZ[EbuzimaSourceAdaptor]
-    MAPPER[EbuzimaPayloadMapper]
 
     CE[CloudEventEnvelopeBuilder]
     ETN[EventTypeNormalizer]
@@ -271,7 +267,6 @@ flowchart TD
     NORM --> REG
     REG --> SA_EBZ
 
-    SA_EBZ --> MAPPER
     SA_EBZ --> CE
     SA_EBZ --> PIE
 
@@ -299,7 +294,7 @@ flowchart TD
 ```mermaid
 flowchart LR
     subgraph "External Sources"
-        A2[eBUZIMA EMR]
+        A2[eBUZIMA EMR<br/>FHIR Bundle]
     end
 
     subgraph "OpenHIM"
@@ -320,7 +315,7 @@ flowchart LR
 
     A2 --> OHC
 
-    OHC -->|"Secondary route"| EA
+    OHC -->|"Secondary route<br/>(not primary path)"| EA
     EA -->|"Register + heartbeat"| OHC_API
     EA -->|"POST /v1/events"| COL
     COL --> KAFKA

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The **CCE Emitter Adaptor** is an [OpenHIM mediator](https://openhim.org/) built as a standard **Spring Boot 3.x** application. It receives clinical events from the **eBUZIMA EMR**, transforms eBUZIMA-native JSON into CloudEvents v1.0 with FHIR R4 payloads, and forwards them to the CCE Collector.
+The **CCE Emitter Adaptor** is a generic [OpenHIM mediator](https://openhim.org/) built as a standard **Spring Boot 3.x** application. It is configurable for different source systems — currently configured for **eBUZIMA EMR**. It receives FHIR Bundle payloads via OpenHIM Core (secondary route), wraps individual FHIR resources in CloudEvents v1.0 envelopes, and forwards them to the CCE Collector.
 
 **No third-party mediator library is used** — the OpenHIM mediator contract (registration, heartbeat, response envelope) is implemented via custom Spring components.
 
@@ -36,12 +36,11 @@ docker compose up -d
 curl -s http://localhost:8082/actuator/health | jq
 # → { "status": "UP" }
 
-# 5. Send a test event (eBUZIMA clinical visit)
-curl -X POST http://localhost:8082/inbound/ebuzima \
+# 5. Send a test event (FHIR Bundle)
+curl -X POST http://localhost:8082/inbound \
   -H "Content-Type: application/json" \
   -H "X-OpenHIM-ClientID: ebuzima-emr-client" \
-  -H "X-Source-System: ebuzima" \
-  -d '{"visitId":"visit-001","patientUpid":"260225-0002-5501","facilityId":"0002","visitType":"ANC_VISIT","clinician":"Dr. Uwase","visitDate":"2026-02-25T08:00:00Z"}'
+  -d '{"resourceType":"Bundle","type":"searchset","total":1,"entry":[{"resource":{"resourceType":"Encounter","id":"enc-001","status":"finished","subject":{"reference":"Patient/260225-0002-5501"},"period":{"start":"2026-02-25T08:00:00Z"}}}]}'
 # → 202 Accepted
 ```
 
@@ -50,8 +49,8 @@ curl -X POST http://localhost:8082/inbound/ebuzima \
 ```
 eBUZIMA EMR → OpenHIM Core → Emitter Adaptor → CCE Collector → Kafka
                                     │
-                                    ├── eBUZIMA Source Adaptor
-                                    ├── eBUZIMA → FHIR R4 mapping
+                                    ├── Source Adaptor (header-based routing)
+                                    ├── FHIR Bundle → extract resources
                                     ├── CloudEvent v1.0 envelope
                                     ├── Forward to Collector (@Retryable)
                                     └── OpenHIM response wrapping
@@ -63,7 +62,7 @@ eBUZIMA EMR → OpenHIM Core → Emitter Adaptor → CCE Collector → Kafka
 |-----------|-------------|
 | `InboundEventController` | `@RestController` — receives POSTs from OpenHIM |
 | `SourceAdaptorRegistry` | Auto-discovers `@Component` adaptors; routes to matching adaptor |
-| `EbuzimaSourceAdaptor` | Transforms eBUZIMA-native JSON → FHIR R4 resources |
+| `EbuzimaSourceAdaptor` | Handles eBUZIMA source — parses FHIR Bundle, extracts resources |
 | `CollectorForwardingService` | `@Retryable` — POSTs CloudEvents to Collector via `RestClient` |
 | `MediatorRegistrar` | Registers with OpenHIM Core on startup |
 | `HeartbeatScheduler` | `@Scheduled` — periodic heartbeat + dynamic config sync |
@@ -101,8 +100,7 @@ src/main/java/org/openphc/cce/emitter/
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/inbound` | POST | Generic inbound (adaptor auto-selected) |
-| `/inbound/ebuzima` | POST | eBUZIMA source (explicit) |
+| `/inbound` | POST | Inbound FHIR Bundle (adaptor auto-selected via headers) |
 | `/actuator/health` | GET | Health status |
 | `/actuator/prometheus` | GET | Prometheus metrics |
 

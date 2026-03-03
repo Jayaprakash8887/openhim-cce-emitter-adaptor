@@ -1,42 +1,43 @@
-# CCE Emitter Adaptor — Architecture Overview
+# CCE openHIM Emitter Adaptor — Architecture Overview
 
 ## 1. Purpose
 
-The Emitter Adaptor is an **OpenHIM mediator** built as a standalone **Spring Boot 3.x** application. It serves as the bridge between the **eBUZIMA EMR** and the CCE platform. It is responsible for:
+The Emitter Adaptor is a generic **OpenHIM mediator** built as a standalone **Spring Boot 3.x** application. It is configurable for different source systems — currently configured for **eBUZIMA EMR**. The same adaptor can support additional sources with configuration changes only. It is responsible for:
 
-1. **Receiving** eBUZIMA clinical visit data via OpenHIM Core routing
-2. **Mapping** eBUZIMA-native JSON payloads to FHIR R4 resources
-3. **Normalizing** event types to the `org.openphc.cce.<resource>` format
-4. **Constructing** CloudEvents v1.0 envelopes with CCE-required fields and extensions
-5. **Forwarding** the normalized CloudEvents to the CCE Collector Service via `RestClient`
+1. **Receiving** FHIR Bundle payloads routed via OpenHIM Core (secondary route — not on the primary path)
+2. **Extracting** individual FHIR R4 resources from the Bundle entries
+3. **Constructing** CloudEvents v1.0 envelopes with CCE-required fields and extensions
+4. **Forwarding** the CloudEvents to the CCE Collector Service via `RestClient`
 
 ## 2. System Context
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    eBUZIMA EMR                                │
-│            (Clinical visits, observations, etc.)             │
+│            (Sends FHIR Bundle payloads)                      │
 └──────────────────────────┬──────────────────────────────────┘
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    OpenHIM Core (RHIE)                        │
 │   Channel routing, transaction logging, access control       │
-│   (existing eBUZIMA channel — adaptor added as secondary route)│
+│   ┌───────────────────────────────────────────────────────┐  │
+│   │ Existing eBUZIMA Channel                              │  │
+│   │   Primary route  → SHR / other mediators              │  │
+│   │   Secondary route → CCE Emitter Adaptor ★             │  │
+│   └───────────────────────────────────────────────────────┘  │
 └──────────────────────────┬──────────────────────────────────┘
-                           │  HTTP (routed to mediator)
+                           │  HTTP (secondary route copy)
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
 │           ★ CCE Emitter Adaptor (this service) ★             │
 │   Spring Boot 3.4.x + HAPI FHIR 7.4.0                       │
 │                                                              │
-│  1. @RestController receives HTTP POST                       │
-│  2. Parse eBUZIMA-native JSON payload                        │
-│  3. Map to FHIR R4 resources (Encounter, Observation, etc.) │
-│  4. Normalize event type → org.openphc.cce.<resource>        │
-│  5. Build CloudEvents v1.0 envelope                          │
-│  6. Forward via RestClient to CCE Collector                  │
-│  7. Wrap response in OpenHIM mediator format                 │
+│  1. @RestController receives FHIR Bundle via POST /inbound   │
+│  2. Parse FHIR Bundle, extract resource entries              │
+│  3. Build CloudEvents v1.0 envelope per resource             │
+│  4. Forward via RestClient to CCE Collector                  │
+│  5. Wrap response in OpenHIM mediator format                 │
 └──────────────────────────┬──────────────────────────────────┘
                            │  HTTP POST (CloudEvents JSON)
                            ▼
@@ -63,10 +64,10 @@ The Emitter Adaptor is an **OpenHIM mediator** built as a standalone **Spring Bo
 |-----------|-------------|
 | **Spring Boot Standard** | Standard Spring Boot application — embedded Tomcat, DI, `@ConfigurationProperties`, Actuator health/metrics |
 | **Stateless** | No local database; no session state; all context derived from inbound request |
-| **Single Responsibility** | eBUZIMA adaptor handles eBUZIMA-specific format; extensible via `SourceAdaptor` interface |
-| **Open/Closed** | Future source systems can be added by implementing `SourceAdaptor` and annotating `@Component` — auto-discovered |
+| **Single Responsibility** | Generic adaptor configurable per source via `SourceAdaptor` interface — currently eBUZIMA |
+| **Open/Closed** | Additional sources can be supported by implementing `SourceAdaptor` and annotating `@Component` — auto-discovered, or via configuration changes |
 | **Idempotent Output** | Same source event always produces the same CloudEvents `id` — Collector handles dedup |
-| **Fail-Fast** | Invalid/unmappable payloads rejected immediately with descriptive errors |
+| **Fail-Fast** | Invalid payloads rejected immediately with descriptive errors |
 | **Retry with Backoff** | Collector forwarding uses Spring Retry with exponential backoff on 5xx/timeout |
 
 ## 4. Technology Stack
@@ -99,7 +100,6 @@ The OpenHIM mediator contract is implemented with plain Spring Boot components �
 │  ┌──────────────────┐  ┌─────────────────────────────┐   │
 │  │ Embedded Tomcat   │  │ @RestController (InboundCtrl)│   │
 │  │ port: 8082        │──│  POST /inbound               │   │
-│  │                   │  │  POST /inbound/ebuzima        │   │
 │  └──────────────────┘  └─────────────────────────────┘   │
 │  ┌──────────────────┐  ┌─────────────────────────────┐   │
 │  │ MediatorRegistrar │  │ HeartbeatScheduler           │   │
@@ -141,7 +141,7 @@ org.openphc.cce.emitter/
 │   └── CollectorProperties.java                   #   @ConfigurationProperties for cce.collector.*
 │
 ├── controller/                                    # Spring MVC controllers
-│   ├── InboundEventController.java                #   @RestController: POST /inbound, /inbound/fhir, etc.
+│   ├── InboundEventController.java                #   @RestController: POST /inbound
 │   └── HealthController.java                      #   Custom health info (supplements Actuator)
 │
 ├── openhim/                                       # OpenHIM mediator integration
@@ -157,10 +157,9 @@ org.openphc.cce.emitter/
 ├── adaptor/                                       # Source system adaptors
 │   ├── SourceAdaptor.java                         #   Interface: canHandle + adapt + getSourceIdentifier
 │   ├── SourceAdaptorRegistry.java                 #   Finds correct adaptor (injected List<SourceAdaptor>)
-│   ├── AbstractSourceAdaptor.java                 #   Base class with common FHIR + CloudEvents logic
+│   ├── AbstractSourceAdaptor.java                 #   Base class: FHIR Bundle parsing + CloudEvents building
 │   └── ebuzima/
-│       ├── EbuzimaSourceAdaptor.java              #   @Component: eBUZIMA JSON → FHIR R4
-│       └── EbuzimaPayloadMapper.java              #   Field-level mapping logic
+│       └── EbuzimaSourceAdaptor.java              #   @Component: eBUZIMA header matching + config
 │
 ├── cloudevents/                                   # CloudEvents envelope construction
 │   ├── CloudEventEnvelopeBuilder.java             #   Builds CloudEvents v1.0 JSON
@@ -173,7 +172,7 @@ org.openphc.cce.emitter/
 │   └── PatientIdExtractor.java                    #   Extract patient UPID from FHIR resources
 │
 ├── service/                                       # Business logic
-│   ├── EventNormalizationService.java             #   Orchestrator: adapt → normalize → build CloudEvent
+│   ├── EventProcessingService.java                #   Orchestrator: parse Bundle → build CloudEvents → forward
 │   ├── CollectorForwardingService.java            #   @Retryable: POST to Collector via RestClient
 │   └── CollectorResponseHandler.java              #   Parse Collector response, determine retry
 │
@@ -188,7 +187,6 @@ org.openphc.cce.emitter/
 ├── exception/                                     # Custom exceptions
 │   ├── SourceNotRecognizedException.java
 │   ├── SourceAdaptorException.java
-│   ├── FhirMappingException.java
 │   ├── PatientIdNotFoundException.java
 │   ├── CollectorForwardingException.java
 │   └── GlobalExceptionHandler.java                #   @ControllerAdvice for consistent error responses
@@ -218,7 +216,7 @@ public interface SourceAdaptor {
 | 1 | `InboundEventController` | Receives HTTP POST, extracts body, headers, path |
 | 2 | `InboundRequest.from()` | Wraps raw data into domain object with `SourceMetadata` |
 | 3 | `SourceAdaptorRegistry.findAdaptor()` | Iterates registered `@Component` adaptors; first `canHandle()` match wins |
-| 4 | `SourceAdaptor.adapt()` | Parses eBUZIMA payload, maps to FHIR R4, builds `List<CloudEventDto>` |
+| 4 | `SourceAdaptor.adapt()` | Parses FHIR Bundle, extracts resources, builds `List<CloudEventDto>` |
 | 5 | `CollectorForwardingService.forward()` | POSTs each CloudEvent to Collector via `RestClient`; `@Retryable` on 5xx |
 | 6 | `OpenHimResponseWrapper.wrap()` | Wraps response + orchestration log in `application/json+openhim` format |
 
@@ -228,8 +226,7 @@ public interface SourceAdaptor {
 
 | Direction | Protocol | Endpoint | Content |
 |-----------|----------|----------|---------|
-| **IN** | HTTP POST | `/inbound` | eBUZIMA payload (auto-detect) |
-| **IN** | HTTP POST | `/inbound/ebuzima` | eBUZIMA-native JSON (explicit path) |
+| **IN** | HTTP POST | `/inbound` | FHIR Bundle (source identified via headers) |
 
 ### 8.2 Outbound (to CCE Collector)
 
@@ -266,8 +263,7 @@ Errors are handled by `GlobalExceptionHandler` (`@ControllerAdvice`):
 | Scenario | Action | HTTP Status |
 |----------|--------|-------------|
 | Unknown source system | Log + reject | 400 with `SOURCE_NOT_RECOGNIZED` |
-| Source payload unparseable | Log + reject | 400 with `PAYLOAD_PARSE_ERROR` |
-| FHIR mapping failure | Log + reject | 422 with `FHIR_MAPPING_ERROR` |
+| FHIR Bundle unparseable | Log + reject | 400 with `PAYLOAD_PARSE_ERROR` |
 | Patient UPID not extractable | Log + reject | 400 with `PATIENT_ID_NOT_FOUND` |
 | Collector returns 400 | Log + return error | 400 (non-retryable) |
 | Collector returns 422 | Log + return error | 422 (non-retryable) |

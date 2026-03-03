@@ -402,18 +402,26 @@ curl -s http://localhost:8082/actuator/prometheus | grep cce_emitter
 ### Send a Test Event
 
 ```bash
-curl -X POST http://localhost:8082/inbound/ebuzima \
+curl -X POST http://localhost:8082/inbound \
   -H "Content-Type: application/json" \
   -H "X-OpenHIM-ClientID: ebuzima-emr-client" \
-  -H "X-Source-System: ebuzima" \
   -H "X-Facility-Id: FAC-001" \
   -d '{
-    "visitId": "ebz-visit-001",
-    "patientUpid": "PAT-12345",
-    "visitDate": "2026-02-25T08:00:00Z",
-    "facilityId": "FAC-001",
-    "visitType": "CLINICAL_VISIT",
-    "status": "completed"
+    "resourceType": "Bundle",
+    "type": "searchset",
+    "total": 1,
+    "entry": [
+      {
+        "resource": {
+          "resourceType": "Encounter",
+          "id": "enc-visit-001",
+          "status": "finished",
+          "class": {"code": "AMB"},
+          "subject": {"reference": "Patient/PAT-12345"},
+          "period": {"start": "2026-02-25T08:00:00Z"}
+        }
+      }
+    ]
   }'
 ```
 

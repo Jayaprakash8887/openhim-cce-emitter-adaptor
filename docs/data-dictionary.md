@@ -11,11 +11,11 @@ The adaptor outputs CloudEvents v1.0-compliant JSON to the CCE Collector.
 | `specversion` | string | **Yes** — always `"1.0"` | Static | CloudEvents specification version |
 | `id` | string (UUID) | **Yes** | Generated | Unique event identifier (`UUID.randomUUID()` or deterministic hash) |
 | `source` | string (URI) | **Yes** | Adaptor | Source system identifier (e.g. `"ebuzima"`) |
-| `type` | string | **Yes** | Adaptor | Normalized event type: `"org.openphc.cce.<resourcetype>"` (lowercase). |
+| `type` | string | **Yes** | Adaptor | Event type string: `"org.openphc.cce.<resourcetype>"` (lowercase) |
 | `subject` | string | Recommended | Extracted from FHIR | Patient UPID (`Patient/<upid>` or bare UPID). Used as Kafka partition key. |
 | `time` | string (ISO-8601) | Recommended | Adaptor | Event creation timestamp in UTC |
 | `datacontenttype` | string | Recommended | Static | Always `"application/fhir+json"` |
-| `data` | object | Recommended | Transformed | FHIR R4 resource JSON (the payload) |
+| `data` | object | Recommended | From FHIR Bundle entry | FHIR R4 resource JSON (extracted from Bundle) |
 | `facilityid` | string | Optional | Header / payload | Facility FOSA ID from `X-Facility-Id` header or extracted from payload |
 | `sourceeventid` | string | Optional | Header / payload | Source system's original event ID from `X-Source-Event-Id` header |
 | `correlationid` | string | Optional | Header | Trace correlation ID from `X-Correlation-Id` header |
@@ -23,11 +23,11 @@ The adaptor outputs CloudEvents v1.0-compliant JSON to the CCE Collector.
 | `protocoldefinitionid` | string | Optional | Usually null | Protocol definition — emitter normally does not set this |
 | `actionid` | string | Optional | Usually null | Action — emitter normally does not set this |
 
-### 1.2 Validation Rules
+### 1.2 Core Field Population
 
 | Rule | Detail |
 |------|--------|
-| **Adaptor populates all practical fields** | Despite relaxed Collector validation, the adaptor should populate `id`, `source`, `type`, `subject`, `time`, `datacontenttype`, and `data` for correct downstream processing by the Compliance Service. |
+| **Adaptor populates all required fields** | The adaptor's core responsibility is to populate `id`, `source`, `type`, `subject`, `time`, `datacontenttype`, and `data` for correct downstream processing by the Compliance Service. |
 | **Extension attributes are lowercase** | Per CloudEvents spec, custom extension attributes use `lowercase` without separators: `facilityid`, `sourceeventid`, `correlationid`, `protocolinstanceid`, etc. |
 
 ### 1.3 Sample CloudEvent
@@ -61,15 +61,15 @@ The adaptor outputs CloudEvents v1.0-compliant JSON to the CCE Collector.
 
 | Element | Source | Description |
 |---------|--------|-------------|
-| **Body** | HTTP body | eBUZIMA JSON payload |
-| **Content-Type** | Header | `application/json` |
-| **X-OpenHIM-ClientID** | Header (optional) | OpenHIM-authenticated client ID. Matched against `cce.emitter.sources.ebuzima.client-id` for routing. Set by OpenHIM Core. |
+| **Body** | HTTP body | FHIR R4 Bundle (`"resourceType": "Bundle"`) |
+| **Content-Type** | Header | `application/json` or `application/fhir+json` |
+| **X-OpenHIM-ClientID** | Header (optional) | OpenHIM-authenticated client ID. Matched against configured source client IDs for routing. Set by OpenHIM Core. |
 | **X-Source-System** | Header (optional) | Source system identifier (e.g., `ebuzima`). Fallback when `X-OpenHIM-ClientID` is absent. May be set by the source system or OpenHIM channel config. |
 | **X-Facility-Id** | Header (optional) | Facility FOSA ID |
 | **X-Source-Event-Id** | Header (optional) | Source system's event ID |
 | **X-Correlation-Id** | Header (optional) | Trace ID for cross-service correlation |
 | **Authorization** | Header | Auth credentials from source system, forwarded via OpenHIM. Passed through to CCE Collector. |
-| **URL Path** | Request URI | Used for adaptor selection: `/inbound/ebuzima` or `/inbound` |
+| **URL Path** | Request URI | Inbound endpoint: `/inbound` |
 
 ### 2.2 InboundRequest Fields
 
@@ -89,7 +89,7 @@ The adaptor outputs CloudEvents v1.0-compliant JSON to the CCE Collector.
 | `sourceEventId` | String | `X-Source-Event-Id` header | Nullable |
 | `correlationId` | String | `X-Correlation-Id` header | Nullable |
 | `eventTime` | OffsetDateTime | `Instant.now(ZoneOffset.UTC)` | When the adaptor received the event |
-| `sourcePath` | String | Request URI path | e.g., `/inbound/ebuzima` |
+| `sourcePath` | String | Request URI path | e.g., `/inbound` |
 | `authorizationHeader` | String | `Authorization` header | Passed through to Collector forwarding. Nullable |
 
 ## 3. Configuration Properties
@@ -249,30 +249,7 @@ The admin adds the following route to the existing eBUZIMA channel via the OpenH
 | `response.body` | String | Response body (stringified) |
 | `response.timestamp` | String | When response was received |
 
-## 7. Sample Event Type Mapping
-
-### 7.1 FHIR Resource → CloudEvent Type
-
-| FHIR resourceType | CloudEvent `type` |
-|--------------------|-------------------|
-| Encounter | `org.openphc.cce.encounter` |
-| Observation | `org.openphc.cce.observation` |
-| Condition | `org.openphc.cce.condition` |
-| Immunization | `org.openphc.cce.immunization` |
-| MedicationAdministration | `org.openphc.cce.medicationadministration` |
-| MedicationRequest | `org.openphc.cce.medicationrequest` |
-| DiagnosticReport | `org.openphc.cce.diagnosticreport` |
-| EpisodeOfCare | `org.openphc.cce.episodeofcare` |
-| ServiceRequest | `org.openphc.cce.servicerequest` |
-| Procedure | `org.openphc.cce.procedure` |
-
-### 7.2 Source Adaptor → Source Identifier
-
-| Adaptor | `source` field value |
-|---------|---------------------|
-| EbuzimaSourceAdaptor | `"ebuzima"` |
-
-## 8. Metrics Reference
+## 7. Metrics Reference
 
 | Metric Name | Type | Labels | Description |
 |-------------|------|--------|-------------|

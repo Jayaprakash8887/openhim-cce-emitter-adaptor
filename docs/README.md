@@ -91,9 +91,7 @@ src/main/java/org/openphc/cce/emitter/
 
 | Document | Description |
 |----------|-------------|
-| [Architecture Overview](architecture-overview.md) | System context, tech stack, package structure |
-| [High-Level Design](high-level-design.md) | Subsystem decomposition, processing pipeline |
-| [Low-Level Design](low-level-design.md) | Detailed class implementations |
+| [Architecture Overview](architecture-overview.md) | System context, tech stack, package structure, processing pipeline, security, deployment |
 | [Developer Setup](developer-setup.md) | Build, run, Docker Compose |
 | [Data Dictionary](data-dictionary.md) | Field definitions, configuration properties |
 | [API Reference](api-reference.md) | All endpoints, request/response examples |

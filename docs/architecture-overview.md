@@ -199,7 +199,7 @@ org.openphc.cce.emitter/
 
 **Estimated: ~28 source files** across 9 packages.
 
-## 7. Key Interfaces
+## 7. Request Processing Pipeline
 
 ### 7.1 SourceAdaptor Interface
 
@@ -211,30 +211,16 @@ public interface SourceAdaptor {
 }
 ```
 
-### 7.2 InboundEventController
+### 7.2 Processing Steps
 
-```java
-@RestController
-@RequestMapping("/inbound")
-@RequiredArgsConstructor
-public class InboundEventController {
-
-    private final EventNormalizationService normalizationService;
-    private final CollectorForwardingService forwardingService;
-    private final OpenHimResponseWrapper responseWrapper;
-
-    @PostMapping({"", "/ebuzima"})
-    public ResponseEntity<?> handleInbound(
-            @RequestBody String body,
-            @RequestHeader Map<String, String> headers,
-            HttpServletRequest servletRequest) {
-        // 1. Build InboundRequest from body + headers + path
-        // 2. Normalize → List<CloudEventDto>
-        // 3. Forward each to Collector
-        // 4. Wrap in OpenHIM response format
-    }
-}
-```
+| Step | Component | Description |
+|------|-----------|-------------|
+| 1 | `InboundEventController` | Receives HTTP POST, extracts body, headers, path |
+| 2 | `InboundRequest.from()` | Wraps raw data into domain object with `SourceMetadata` |
+| 3 | `SourceAdaptorRegistry.findAdaptor()` | Iterates registered `@Component` adaptors; first `canHandle()` match wins |
+| 4 | `SourceAdaptor.adapt()` | Parses eBUZIMA payload, maps to FHIR R4, builds `List<CloudEventDto>` |
+| 5 | `CollectorForwardingService.forward()` | POSTs each CloudEvent to Collector via `RestClient`; `@Retryable` on 5xx |
+| 6 | `OpenHimResponseWrapper.wrap()` | Wraps response + orchestration log in `application/json+openhim` format |
 
 ## 8. External Interfaces
 
@@ -258,7 +244,22 @@ public class InboundEventController {
 | **OUT** | HTTP POST | `{core-url}/mediators` | Registration on startup |
 | **OUT** | HTTP POST | `{core-url}/mediators/{urn}/heartbeat` | Periodic heartbeat |
 
-## 9. Error Handling Strategy
+## 9. Configuration
+
+```
+┌─────────────────────────────────────┐
+│ Highest Priority                     │
+│                                      │
+│  1. Dynamic Config (OpenHIM Console) │  ← synced via heartbeat
+│  2. Environment Variables            │  ← SPRING_APPLICATION_JSON, --server.port
+│  3. Profile-specific YAML            │  ← application-prod.yml
+│  4. application.yml                  │  ← default config
+│                                      │
+│ Lowest Priority                      │
+└─────────────────────────────────────┘
+```
+
+## 10. Error Handling Strategy
 
 Errors are handled by `GlobalExceptionHandler` (`@ControllerAdvice`):
 
@@ -274,17 +275,27 @@ Errors are handled by `GlobalExceptionHandler` (`@ControllerAdvice`):
 | Collector returns 500 | Retry with backoff (max 3) | 500 if all retries exhausted |
 | Collector unreachable | Retry with backoff (max 3) | 502 if all retries exhausted |
 
-## 10. Observability
+## 11. Security
 
-### Actuator Endpoints
+| Concern | Mechanism |
+|---------|-----------|
+| **OpenHIM ↔ Mediator** | OpenHIM Core routes requests via existing eBUZIMA channel (secondary route); mediator trusts OpenHIM channel auth |
+| **Mediator → OpenHIM Core API** | Basic auth (`root@openhim.org` / password) for registration + heartbeat |
+| **Mediator → CCE Collector** | Authorization header passed through from inbound request. CCE Gateway validates the token (OAuth scope: `events:write`). |
+| **TLS** | HTTPS connections configurable via Spring Boot `server.ssl.*` properties |
 
-| Endpoint | Purpose |
-|----------|---------|
-| `GET /actuator/health` | Application health (UP/DOWN) |
-| `GET /actuator/health/liveness` | Kubernetes liveness probe |
-| `GET /actuator/health/readiness` | Kubernetes readiness probe |
-| `GET /actuator/prometheus` | Prometheus-formatted metrics |
-| `GET /actuator/info` | Application metadata |
+## 12. Deployment
+
+| Aspect | Value |
+|--------|-------|
+| **Artifact** | `cce-emitter-adaptor.jar` (Spring Boot fat JAR) |
+| **Port** | 8082 |
+| **Liveness** | `/actuator/health/liveness` |
+| **Readiness** | `/actuator/health/readiness` |
+| **Metrics** | `/actuator/prometheus` |
+| **Key env vars** | `OPENHIM_CORE_HOST`, `CCE_COLLECTOR_URL`, `SPRING_PROFILES_ACTIVE` |
+
+## 13. Observability
 
 ### Custom Metrics (Micrometer)
 
@@ -301,7 +312,7 @@ Errors are handled by `GlobalExceptionHandler` (`@ControllerAdvice`):
 
 SLF4J + Logback with structured JSON output. Key MDC fields: `correlationId`, `source`, `eventType`, `subject`.
 
-## 11. Non-Functional Requirements
+## 14. Non-Functional Requirements
 
 | Requirement | Target |
 |-------------|--------|

@@ -34,7 +34,9 @@ POST /inbound
 | `X-Source-System` | No | Source system identifier (e.g., `ebuzima`). Fallback when `X-OpenHIM-ClientID` is absent. |
 | `X-Facility-Id` | No | Facility FOSA ID |
 | `X-Source-Event-Id` | No | Source system's original event ID |
-| `X-Correlation-Id` | No | Cross-service trace ID |
+| `X-Correlation-Id` | No | Trace correlation ID. If present, used as-is; otherwise adaptor generates one. |
+
+> **Note:** This header list is derived from the CCE solution design document and local OpenHIM testing. The actual headers available may change based on the RHIE deployment configuration.
 
 **Body:** FHIR R4 Bundle (`"resourceType": "Bundle"`) containing one or more resource entries.
 

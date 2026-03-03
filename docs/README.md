@@ -2,7 +2,7 @@
 
 ## Overview
 
-The **CCE Emitter Adaptor** is a generic [OpenHIM mediator](https://openhim.org/) built as a standard **Spring Boot 3.x** application. It is configurable for different source systems — currently configured for **eBUZIMA EMR**. It receives FHIR Bundle payloads via OpenHIM Core (secondary route), wraps individual FHIR resources in CloudEvents v1.0 envelopes, and forwards them to the CCE Collector.
+The **CCE Emitter Adaptor** is a generic [OpenHIM mediator](https://openhim.org/) built as a standard **Spring Boot 3.x** application. It is configurable for different source systems — currently configured for **eBUZIMA EMR**. It receives FHIR R4 resource payloads via OpenHIM Core (secondary route), wraps them in CloudEvents v1.0 envelopes, and forwards them to the CCE Collector. The input can be any valid FHIR resource (e.g., Encounter, Observation) or a Bundle.
 
 **No third-party mediator library is used** — the OpenHIM mediator contract (registration, heartbeat, response envelope) is implemented via custom Spring components.
 
@@ -36,11 +36,11 @@ docker compose up -d
 curl -s http://localhost:8082/actuator/health | jq
 # → { "status": "UP" }
 
-# 5. Send a test event (FHIR Bundle)
+# 5. Send a test event (FHIR Encounter)
 curl -X POST http://localhost:8082/inbound \
   -H "Content-Type: application/json" \
   -H "X-OpenHIM-ClientID: ebuzima-emr-client" \
-  -d '{"resourceType":"Bundle","type":"searchset","total":1,"entry":[{"resource":{"resourceType":"Encounter","id":"enc-001","status":"finished","subject":{"reference":"Patient/260225-0002-5501"},"period":{"start":"2026-02-25T08:00:00Z"}}}]}'
+  -d '{"resourceType":"Encounter","id":"enc-001","status":"finished","subject":{"reference":"Patient/260225-0002-5501"},"period":{"start":"2026-02-25T08:00:00Z"}}'
 # → 202 Accepted
 ```
 
@@ -50,7 +50,7 @@ curl -X POST http://localhost:8082/inbound \
 eBUZIMA EMR → OpenHIM Core → Emitter Adaptor → CCE Collector → Kafka
                                     │
                                     ├── Source Adaptor (header-based routing)
-                                    ├── FHIR Bundle → extract resources
+                                    ├── FHIR resource → parse (extract entries if Bundle)
                                     ├── CloudEvent v1.0 envelope
                                     ├── Forward to Collector (@Retryable)
                                     └── OpenHIM response wrapping
@@ -62,7 +62,7 @@ eBUZIMA EMR → OpenHIM Core → Emitter Adaptor → CCE Collector → Kafka
 |-----------|-------------|
 | `InboundEventController` | `@RestController` — receives POSTs from OpenHIM |
 | `SourceAdaptorRegistry` | Auto-discovers `@Component` adaptors; routes to matching adaptor |
-| `EbuzimaSourceAdaptor` | Handles eBUZIMA source — parses FHIR Bundle, extracts resources |
+| `AbstractSourceAdaptor` | Base class — parses FHIR resources, builds CloudEvents |
 | `CollectorForwardingService` | `@Retryable` — POSTs CloudEvents to Collector via `RestClient` |
 | `MediatorRegistrar` | Registers with OpenHIM Core on startup |
 | `HeartbeatScheduler` | `@Scheduled` — periodic heartbeat + dynamic config sync |
@@ -77,7 +77,6 @@ src/main/java/org/openphc/cce/emitter/
 ├── controller/        # InboundEventController
 ├── openhim/           # MediatorRegistrar, HeartbeatScheduler, ResponseWrapper
 ├── adaptor/           # SourceAdaptor interface, AbstractSourceAdaptor, Registry
-│   └── ebuzima/       # EbuzimaSourceAdaptor, EbuzimaPayloadMapper
 ├── cloudevents/       # CloudEventEnvelopeBuilder, EventIdGenerator
 ├── fhir/              # FhirResourceParser, PatientIdExtractor
 ├── service/           # EventProcessingService, CollectorForwardingService
@@ -100,7 +99,7 @@ src/main/java/org/openphc/cce/emitter/
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/inbound` | POST | Inbound FHIR Bundle (adaptor auto-selected via headers) |
+| `/inbound` | POST | Inbound FHIR resource (adaptor auto-selected via headers) |
 | `/actuator/health` | GET | Health status |
 | `/actuator/prometheus` | GET | Prometheus metrics |
 

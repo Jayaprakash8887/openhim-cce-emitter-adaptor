@@ -4,8 +4,8 @@
 
 The Emitter Adaptor is a generic **OpenHIM mediator** built as a standalone **Spring Boot 3.x** application. It is configurable for different source systems — currently configured for **eBUZIMA EMR**. It is responsible for:
 
-1. **Receiving** FHIR Bundle payloads routed via OpenHIM Core (secondary route — not on the primary path)
-2. **Extracting** individual FHIR R4 resources from the Bundle entries
+1. **Receiving** FHIR R4 resource payloads routed via OpenHIM Core (secondary route — not on the primary path)
+2. **Parsing** the FHIR resource using HAPI FHIR (supports individual resources and Bundle entries)
 3. **Constructing** CloudEvents v1.0 envelopes with CCE-required fields and extensions
 4. **Forwarding** the CloudEvents to the CCE Collector Service via `RestClient`
 
@@ -14,7 +14,7 @@ The Emitter Adaptor is a generic **OpenHIM mediator** built as a standalone **Sp
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    eBUZIMA EMR                                │
-│            (Sends FHIR Bundle payloads)                      │
+│            (Sends FHIR R4 resource payloads)                 │
 └──────────────────────────┬──────────────────────────────────┘
                            │
                            ▼
@@ -33,8 +33,8 @@ The Emitter Adaptor is a generic **OpenHIM mediator** built as a standalone **Sp
 │           ★ CCE Emitter Adaptor (this service) ★             │
 │   Spring Boot 3.4.x + HAPI FHIR 7.4.0                       │
 │                                                              │
-│  1. @RestController receives FHIR Bundle via POST /inbound   │
-│  2. Parse FHIR Bundle, extract resource entries              │
+│  1. @RestController receives FHIR resource via POST /inbound │
+│  2. Parse FHIR resource, extract entries if Bundle            │
 │  3. Build CloudEvents v1.0 envelope per resource             │
 │  4. Forward via RestClient to CCE Collector                  │
 │  5. Wrap response in OpenHIM mediator format                 │
@@ -157,9 +157,7 @@ org.openphc.cce.emitter/
 ├── adaptor/                                       # Source system adaptors
 │   ├── SourceAdaptor.java                         #   Interface: canHandle + adapt + getSourceIdentifier
 │   ├── SourceAdaptorRegistry.java                 #   Finds correct adaptor (injected List<SourceAdaptor>)
-│   ├── AbstractSourceAdaptor.java                 #   Base class: FHIR Bundle parsing + CloudEvents building
-│   └── ebuzima/
-│       └── EbuzimaSourceAdaptor.java              #   @Component: eBUZIMA header matching + config
+│   └── AbstractSourceAdaptor.java                 #   Base class: FHIR resource parsing + CloudEvents building
 │
 ├── cloudevents/                                   # CloudEvents envelope construction
 │   ├── CloudEventEnvelopeBuilder.java             #   Builds CloudEvents v1.0 JSON
@@ -171,7 +169,7 @@ org.openphc.cce.emitter/
 │   └── PatientIdExtractor.java                    #   Extract patient UPID from FHIR resources
 │
 ├── service/                                       # Business logic
-│   ├── EventProcessingService.java                #   Orchestrator: parse Bundle → build CloudEvents → forward
+│   ├── EventProcessingService.java                #   Orchestrator: parse FHIR → build CloudEvents → forward
 │   ├── CollectorForwardingService.java            #   @Retryable: POST to Collector via RestClient
 │   └── CollectorResponseHandler.java              #   Parse Collector response, determine retry
 │
@@ -215,7 +213,7 @@ public interface SourceAdaptor {
 | 1 | `InboundEventController` | Receives HTTP POST, extracts body, headers, path |
 | 2 | `InboundRequest.from()` | Wraps raw data into domain object with `SourceMetadata` |
 | 3 | `SourceAdaptorRegistry.findAdaptor()` | Iterates registered `@Component` adaptors; first `canHandle()` match wins |
-| 4 | `SourceAdaptor.adapt()` | Parses FHIR Bundle, extracts resources, builds `List<CloudEventDto>` |
+| 4 | `SourceAdaptor.adapt()` | Parses FHIR resource (or Bundle entries), builds `List<CloudEventDto>` |
 | 5 | `CollectorForwardingService.forward()` | POSTs each CloudEvent to Collector via `RestClient`; `@Retryable` on 5xx |
 | 6 | `OpenHimResponseWrapper.wrap()` | Wraps response + orchestration log in `application/json+openhim` format |
 
@@ -225,7 +223,7 @@ public interface SourceAdaptor {
 
 | Direction | Protocol | Endpoint | Content |
 |-----------|----------|----------|---------|
-| **IN** | HTTP POST | `/inbound` | FHIR Bundle (source identified via headers) |
+| **IN** | HTTP POST | `/inbound` | FHIR R4 resource (source identified via headers) |
 
 ### 8.2 Outbound (to CCE Collector)
 
@@ -262,7 +260,7 @@ Errors are handled by `GlobalExceptionHandler` (`@ControllerAdvice`):
 | Scenario | Action | HTTP Status |
 |----------|--------|-------------|
 | Unknown source system | Log + reject | 400 with `SOURCE_NOT_RECOGNIZED` |
-| FHIR Bundle unparseable | Log + reject | 400 with `PAYLOAD_PARSE_ERROR` |
+| FHIR resource unparseable | Log + reject | 400 with `PAYLOAD_PARSE_ERROR` |
 | Patient UPID not extractable | Log + reject | 400 with `PATIENT_ID_NOT_FOUND` |
 | Collector returns 400 | Log + return error | 400 (non-retryable) |
 | Collector returns 422 | Log + return error | 422 (non-retryable) |

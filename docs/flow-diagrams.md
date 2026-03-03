@@ -7,7 +7,7 @@ All diagrams use Mermaid notation.
 ```mermaid
 flowchart LR
     subgraph Sources
-        EBZ[eBUZIMA EMR<br/>FHIR Bundle]
+        EBZ[eBUZIMA EMR<br/>FHIR Resource]
     end
 
     subgraph OpenHIM
@@ -17,7 +17,7 @@ flowchart LR
     subgraph "CCE Emitter Adaptor (Spring Boot)"
         CTRL[InboundEvent<br/>Controller]
         SA[SourceAdaptor<br/>Registry]
-        PARSE[FHIR Bundle<br/>Parser]
+        PARSE[FHIR Resource<br/>Parser]
         NORM[CloudEvent<br/>Builder]
         FWD["Collector<br/>Forwarding<br/>@Retryable"]
         WRAP[OpenHIM<br/>ResponseWrapper]
@@ -28,7 +28,7 @@ flowchart LR
         KAFKA[Kafka<br/>cce.events.inbound]
     end
 
-    EBZ -->|FHIR Bundle| OHC
+    EBZ -->|FHIR Resource| OHC
 
     OHC -->|"Secondary route<br/>(not primary path)"| CTRL
     CTRL --> SA
@@ -55,7 +55,7 @@ sequenceDiagram
     participant Col as CCE Collector
     participant Wrap as OpenHimResponseWrapper
 
-    OHC->>Ctrl: POST /inbound (FHIR Bundle)
+    OHC->>Ctrl: POST /inbound (FHIR Resource)
     activate Ctrl
 
     Ctrl->>Ctrl: InboundRequest.from(body, headers, path)
@@ -63,15 +63,15 @@ sequenceDiagram
     Ctrl->>Reg: findAdaptor(inboundRequest)
     Reg->>Reg: Iterate @Order-sorted adaptors
     Reg->>SA: canHandle(request) → true
-    Reg-->>Ctrl: EbuzimaSourceAdaptor
+    Reg-->>Ctrl: Matching SourceAdaptor
 
     Ctrl->>SA: adapt(inboundRequest)
     activate SA
-    SA->>SA: Parse FHIR Bundle
-    SA->>SA: Extract resource entries
+    SA->>SA: Parse FHIR resource
+    SA->>SA: Extract entries if Bundle
     SA->>CE: build(fhirResource, patientUpid, type, metadata)
     CE-->>SA: CloudEventDto
-    SA-->>Ctrl: List<CloudEventDto> (per Bundle entry)
+    SA-->>Ctrl: List<CloudEventDto>
     deactivate SA
 
     loop Each CloudEvent
@@ -203,7 +203,7 @@ flowchart TD
     B -->|Yes| D{Adaptor found?}
 
     D -->|No| E[SourceNotRecognizedException<br/>→ 400 SOURCE_NOT_RECOGNIZED]
-    D -->|Yes| F{FHIR Bundle valid?}
+    D -->|Yes| F{FHIR resource valid?}
 
     F -->|No| G[SourceAdaptorException<br/>→ 400 PAYLOAD_PARSE_ERROR]
     F -->|Yes| H{Patient ID found?}
@@ -245,7 +245,7 @@ flowchart TD
     FWD[CollectorForwardingService]
     WRAP[OpenHimResponseWrapper]
 
-    SA_EBZ[EbuzimaSourceAdaptor]
+    SA_ABS[AbstractSourceAdaptor]
 
     CE[CloudEventEnvelopeBuilder]
     PIE[PatientIdExtractor]
@@ -264,10 +264,10 @@ flowchart TD
     CTRL --> WRAP
 
     NORM --> REG
-    REG --> SA_EBZ
+    REG --> SA_ABS
 
-    SA_EBZ --> CE
-    SA_EBZ --> PIE
+    SA_ABS --> CE
+    SA_ABS --> PIE
 
     CE --> IDG
 
@@ -276,7 +276,7 @@ flowchart TD
     HB --> RC
     HB --> DC
 
-    SA_EBZ --> FC
+    SA_ABS --> FC
     FRP --> FC
 
     style CTRL fill:#bbdefb
@@ -292,7 +292,7 @@ flowchart TD
 ```mermaid
 flowchart LR
     subgraph "External Sources"
-        A2[eBUZIMA EMR<br/>FHIR Bundle]
+        A2[eBUZIMA EMR<br/>FHIR Resource]
     end
 
     subgraph "OpenHIM"

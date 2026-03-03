@@ -38,7 +38,7 @@ POST /inbound
 
 > **Note:** This header list is derived from the CCE solution design document and local OpenHIM testing. The actual headers available may change based on the RHIE deployment configuration.
 
-**Body:** FHIR R4 Bundle (`"resourceType": "Bundle"`) containing one or more resource entries.
+**Body:** Valid FHIR R4 resource JSON. Can be an individual resource (e.g., `Encounter`, `Observation`) or a `Bundle` containing multiple resource entries.
 
 ### Response Format
 
@@ -83,7 +83,7 @@ POST /inbound
 
 ## 3. Request & Response Examples
 
-### 3.1 eBUZIMA Clinical Visit (FHIR Bundle)
+### 3.1 eBUZIMA Clinical Visit (FHIR Encounter)
 
 **Request:**
 
@@ -93,29 +93,20 @@ curl -X POST http://localhost:8082/inbound \
   -H "X-OpenHIM-ClientID: ebuzima-emr-client" \
   -H "X-Facility-Id: FAC-FOSA-001" \
   -d '{
-    "resourceType": "Bundle",
-    "type": "searchset",
-    "total": 1,
-    "entry": [
-      {
-        "resource": {
-          "resourceType": "Encounter",
-          "id": "enc-uuid-visit-kicukiro-001",
-          "status": "finished",
-          "class": {
-            "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
-            "code": "AMB",
-            "display": "ambulatory"
-          },
-          "subject": {
-            "reference": "Patient/UPID-PAT-12345"
-          },
-          "period": {
-            "start": "2026-02-25T08:00:00Z"
-          }
-        }
-      }
-    ]
+    "resourceType": "Encounter",
+    "id": "enc-uuid-visit-kicukiro-001",
+    "status": "finished",
+    "class": {
+      "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+      "code": "AMB",
+      "display": "ambulatory"
+    },
+    "subject": {
+      "reference": "Patient/UPID-PAT-12345"
+    },
+    "period": {
+      "start": "2026-02-25T08:00:00Z"
+    }
   }'
 ```
 
@@ -144,7 +135,7 @@ curl -X POST http://localhost:8082/inbound \
 
 ### 3.2 FHIR Bundle with Multiple Resources
 
-**Result:** When a FHIR Bundle contains multiple resource entries (e.g., Encounter + Observation), the adaptor extracts each resource from the Bundle. Each resource is wrapped in a separate CloudEvent and forwarded individually to the Collector.
+**Result:** When a FHIR Bundle is received, the adaptor extracts each resource entry from the Bundle. Each resource is wrapped in a separate CloudEvent and forwarded individually to the Collector. When an individual FHIR resource (non-Bundle) is received, it is wrapped in a single CloudEvent.
 
 ---
 

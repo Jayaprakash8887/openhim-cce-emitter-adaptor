@@ -163,7 +163,6 @@ org.openphc.cce.emitter/
 │
 ├── cloudevents/                                   # CloudEvents envelope construction
 │   ├── CloudEventEnvelopeBuilder.java             #   Builds CloudEvents v1.0 JSON
-│   ├── EventTypeNormalizer.java                   #   resourceType → org.openphc.cce.<resource>
 │   └── EventIdGenerator.java                      #   Deterministic ID from source + sourceEventId
 │
 ├── fhir/                                          # FHIR utilities

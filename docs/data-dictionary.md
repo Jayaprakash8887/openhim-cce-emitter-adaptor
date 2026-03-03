@@ -11,7 +11,7 @@ The adaptor outputs CloudEvents v1.0-compliant JSON to the CCE Collector.
 | `specversion` | string | **Yes** — always `"1.0"` | Static | CloudEvents specification version |
 | `id` | string (UUID) | **Yes** | Generated | Unique event identifier (`UUID.randomUUID()` or deterministic hash) |
 | `source` | string (URI) | **Yes** | Adaptor | Source system identifier (e.g. `"ebuzima"`) |
-| `type` | string | **Yes** | Adaptor | Event type string: `"org.openphc.cce.<resourcetype>"` (lowercase) |
+| `type` | string | **Yes** | From FHIR resource | FHIR `resourceType` value as-is (e.g., `"Encounter"`, `"Observation"`) |
 | `subject` | string | Recommended | Extracted from FHIR | Patient UPID (`Patient/<upid>` or bare UPID). Used as Kafka partition key. |
 | `time` | string (ISO-8601) | Recommended | Adaptor | Event creation timestamp in UTC |
 | `datacontenttype` | string | Recommended | Static | Always `"application/fhir+json"` |
@@ -37,7 +37,7 @@ The adaptor outputs CloudEvents v1.0-compliant JSON to the CCE Collector.
   "specversion": "1.0",
   "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "source": "ebuzima",
-  "type": "org.openphc.cce.encounter",
+  "type": "Encounter",
   "subject": "UPID-PAT-12345",
   "time": "2026-02-25T08:00:00.000Z",
   "datacontenttype": "application/fhir+json",

@@ -248,7 +248,6 @@ flowchart TD
     SA_EBZ[EbuzimaSourceAdaptor]
 
     CE[CloudEventEnvelopeBuilder]
-    ETN[EventTypeNormalizer]
     PIE[PatientIdExtractor]
     FRP[FhirResourceParser]
     IDG[EventIdGenerator]
@@ -270,7 +269,6 @@ flowchart TD
     SA_EBZ --> CE
     SA_EBZ --> PIE
 
-    CE --> ETN
     CE --> IDG
 
     FWD --> RC

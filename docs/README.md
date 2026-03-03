@@ -78,9 +78,9 @@ src/main/java/org/openphc/cce/emitter/
 ├── openhim/           # MediatorRegistrar, HeartbeatScheduler, ResponseWrapper
 ├── adaptor/           # SourceAdaptor interface, AbstractSourceAdaptor, Registry
 │   └── ebuzima/       # EbuzimaSourceAdaptor, EbuzimaPayloadMapper
-├── cloudevents/       # CloudEventEnvelopeBuilder, EventTypeNormalizer
+├── cloudevents/       # CloudEventEnvelopeBuilder, EventIdGenerator
 ├── fhir/              # FhirResourceParser, PatientIdExtractor
-├── service/           # EventNormalizationService, CollectorForwardingService
+├── service/           # EventProcessingService, CollectorForwardingService
 ├── model/             # DTOs (CloudEventDto, InboundRequest, etc.)
 ├── exception/         # Custom exceptions + GlobalExceptionHandler
 └── util/              # JsonUtil

@@ -64,7 +64,7 @@ POST /inbound
       "request": {
         "method": "POST",
         "path": "/v1/events",
-        "body": "{\"specversion\":\"1.0\",\"type\":\"org.openphc.cce.encounter\",...}",
+        "body": "{\"specversion\":\"1.0\",\"type\":\"Encounter\",...}",
         "timestamp": "2026-02-25T08:00:04Z"
       },
       "response": {
@@ -124,7 +124,7 @@ curl -X POST http://localhost:8082/inbound \
   "specversion": "1.0",
   "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "source": "ebuzima",
-  "type": "org.openphc.cce.encounter",
+  "type": "Encounter",
   "subject": "UPID-PAT-12345",
   "time": "2026-02-25T08:00:00.000Z",
   "datacontenttype": "application/fhir+json",
@@ -297,7 +297,7 @@ Content-Type: application/json
   "specversion": "1.0",
   "id": "...",
   "source": "...",
-  "type": "org.openphc.cce.encounter",
+  "type": "Encounter",
   ...
 }
 ```

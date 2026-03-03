@@ -1,4 +1,4 @@
-# CCE openHIM Emitter Adaptor — Architecture Overview
+# CCE OpenHIM Emitter Adaptor — Architecture Overview
 
 ## 1. Purpose
 

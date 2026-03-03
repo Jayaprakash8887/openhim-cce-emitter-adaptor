@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-The Emitter Adaptor is a generic **OpenHIM mediator** built as a standalone **Spring Boot 3.x** application. It is configurable for different source systems — currently configured for **eBUZIMA EMR**. The same adaptor can support additional sources with configuration changes only. It is responsible for:
+The Emitter Adaptor is a generic **OpenHIM mediator** built as a standalone **Spring Boot 3.x** application. It is configurable for different source systems — currently configured for **eBUZIMA EMR**. It is responsible for:
 
 1. **Receiving** FHIR Bundle payloads routed via OpenHIM Core (secondary route — not on the primary path)
 2. **Extracting** individual FHIR R4 resources from the Bundle entries

@@ -81,8 +81,7 @@ src/main/java/org/openphc/cce/emitter/
 ├── fhir/              # FhirResourceParser, PatientIdExtractor
 ├── service/           # EventProcessingService, CollectorForwardingService
 ├── model/             # DTOs (CloudEventDto, InboundRequest, etc.)
-├── exception/         # Custom exceptions + GlobalExceptionHandler
-└── util/              # JsonUtil
+└── exception/         # Custom exceptions + GlobalExceptionHandler
 ```
 
 ## Documentation

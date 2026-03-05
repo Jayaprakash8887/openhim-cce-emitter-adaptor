@@ -52,8 +52,7 @@ emitter-adaptor/
 │   │   │   ├── fhir/
 │   │   │   ├── service/
 │   │   │   ├── model/
-│   │   │   ├── exception/
-│   │   │   └── util/
+│   │   │   └── exception/
 │   │   └── resources/
 │   │       ├── application.yml
 │   │       ├── application-dev.yml

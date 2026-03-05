@@ -185,12 +185,9 @@ org.openphc.cce.emitter/
 │   ├── PatientIdNotFoundException.java
 │   ├── CollectorForwardingException.java
 │   └── GlobalExceptionHandler.java                #   @ControllerAdvice for consistent error responses
-│
-└── util/
-    └── JsonUtil.java                              #   Jackson helpers
 ```
 
-**Estimated: ~28 source files** across 9 packages.
+**Estimated: ~26 source files** across 8 packages.
 
 ## 7. Request Processing Pipeline
 

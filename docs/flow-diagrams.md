@@ -162,7 +162,6 @@ sequenceDiagram
     participant Reg as MediatorRegistrar
     participant HB as HeartbeatScheduler
     participant Core as OpenHIM Core API
-    participant DC as DynamicConfigService
 
     Note over App: ApplicationReadyEvent
 
@@ -182,13 +181,8 @@ sequenceDiagram
 
     loop Heartbeat cycle
         HB->>Core: POST /mediators/{urn}/heartbeat
-        alt Config update available
-            Core-->>HB: 200 + { config: {...} }
-            HB->>DC: applyConfig(config)
-            DC->>DC: Update Collector URL, timeouts, etc.
-        else No config change
-            Core-->>HB: 200
-        end
+        Core-->>HB: 200 OK
+        HB->>HB: Log debug (uptime)
     end
 ```
 
@@ -253,7 +247,6 @@ flowchart TD
 
     REG_HB[MediatorRegistrar]
     HB[HeartbeatScheduler]
-    DC[DynamicConfigService]
 
     FC["FhirConfig<br/>@Bean FhirContext"]
     RC["RestClientConfig<br/>@Bean RestClient"]
@@ -273,7 +266,6 @@ flowchart TD
     FWD --> RC
     REG_HB --> RC
     HB --> RC
-    HB --> DC
 
     SA_ABS --> FC
     FRP --> FC

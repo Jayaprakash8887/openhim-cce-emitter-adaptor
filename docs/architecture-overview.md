@@ -123,8 +123,7 @@ The OpenHIM mediator contract is implemented with plain Spring Boot components �
 | Phase | Mechanism | Description |
 |-------|-----------|-------------|
 | **Registration** | `MediatorRegistrar` (`@PostConstruct` or `ApplicationReadyEvent`) | POST mediator descriptor to OpenHIM Core `/mediators` (`defaultChannelConfig` = `[]` — no channel auto-provisioning) |
-| **Heartbeat** | `HeartbeatScheduler` (`@Scheduled`) | Periodic POST to `/mediators/{urn}/heartbeat`; receives dynamic config |
-| **Dynamic Config** | `DynamicConfigService` | Parses heartbeat response, updates runtime config (e.g., Collector URL) |
+| **Heartbeat** | `HeartbeatScheduler` (`@Scheduled`) | Periodic POST to `/mediators/{urn}/heartbeat` for liveness |
 | **Response Wrapping** | `OpenHimResponseWrapper` | Wraps `@RestController` responses in `application/json+openhim` envelope |
 
 ## 6. Package Structure
@@ -147,7 +146,6 @@ org.openphc.cce.emitter/
 ├── openhim/                                       # OpenHIM mediator integration
 │   ├── MediatorRegistrar.java                     #   Registers mediator with OpenHIM Core on startup
 │   ├── HeartbeatScheduler.java                    #   Periodic heartbeat to OpenHIM Core
-│   ├── DynamicConfigService.java                  #   Applies dynamic config from heartbeat response
 │   ├── OpenHimResponseWrapper.java                #   Wraps responses in application/json+openhim
 │   └── model/
 │       ├── MediatorDescriptor.java                #   Registration JSON model
@@ -239,10 +237,9 @@ public interface SourceAdaptor {
 ┌─────────────────────────────────────┐
 │ Highest Priority                     │
 │                                      │
-│  1. Dynamic Config (OpenHIM Console) │  ← synced via heartbeat
-│  2. Environment Variables            │  ← SPRING_APPLICATION_JSON, --server.port
-│  3. Profile-specific YAML            │  ← application-prod.yml
-│  4. application.yml                  │  ← default config
+│  1. Environment Variables            │  ← SPRING_APPLICATION_JSON, --server.port
+│  2. Profile-specific YAML            │  ← application-prod.yml
+│  3. application.yml                  │  ← default config
 │                                      │
 │ Lowest Priority                      │
 └─────────────────────────────────────┘

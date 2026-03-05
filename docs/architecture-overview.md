@@ -5,7 +5,7 @@
 The Emitter Adaptor is a generic **OpenHIM mediator** built as a standalone **Spring Boot 3.x** application. It is configurable for different source systems — currently configured for **eBUZIMA EMR**. It is responsible for:
 
 1. **Receiving** FHIR R4 resource payloads routed via OpenHIM Core (secondary route — not on the primary path)
-2. **Parsing** the FHIR resource using HAPI FHIR (supports individual resources and Bundle entries)
+2. **Parsing** the FHIR resource using HAPI FHIR (individual resources only — Bundle processing is out of scope for v1.0)
 3. **Constructing** CloudEvents v1.0 envelopes with CCE-required fields and extensions
 4. **Forwarding** the CloudEvents to the CCE Collector Service via `RestClient`
 
@@ -34,7 +34,7 @@ The Emitter Adaptor is a generic **OpenHIM mediator** built as a standalone **Sp
 │   Spring Boot 3.4.x + HAPI FHIR 7.4.0                       │
 │                                                              │
 │  1. @RestController receives FHIR resource via POST /inbound │
-│  2. Parse FHIR resource, extract entries if Bundle            │
+│  2. Parse FHIR resource (ignore if Bundle)                    │
 │  3. Build CloudEvents v1.0 envelope per resource             │
 │  4. Forward via RestClient to CCE Collector                  │
 │  5. Wrap response in OpenHIM mediator format                 │
@@ -178,11 +178,9 @@ org.openphc.cce.emitter/
 │   ├── InboundRequest.java                        #   Wraps incoming HTTP body + headers
 │   ├── SourceMetadata.java                        #   sourceIdentifier, facilityId, sourceEventId
 │   ├── TransformationResult.java                  #   Per-event success/failure detail
-│   ├── BatchResult.java                           #   Aggregate result for multi-event payloads
 │   └── CollectorResponse.java                     #   Response DTO from Collector
 │
 ├── exception/                                     # Custom exceptions
-│   ├── SourceNotRecognizedException.java
 │   ├── SourceAdaptorException.java
 │   ├── PatientIdNotFoundException.java
 │   ├── CollectorForwardingException.java
@@ -213,7 +211,7 @@ public interface SourceAdaptor {
 | 1 | `InboundEventController` | Receives HTTP POST, extracts body, headers, path |
 | 2 | `InboundRequest.from()` | Wraps raw data into domain object with `SourceMetadata` |
 | 3 | `SourceAdaptorRegistry.findAdaptor()` | Iterates registered `@Component` adaptors; first `canHandle()` match wins |
-| 4 | `SourceAdaptor.adapt()` | Parses FHIR resource (or Bundle entries), builds `List<CloudEventDto>` |
+| 4 | `SourceAdaptor.adapt()` | Parses FHIR resource, builds `List<CloudEventDto>` (Bundle resources are silently ignored) |
 | 5 | `CollectorForwardingService.forward()` | POSTs each CloudEvent to Collector via `RestClient`; `@Retryable` on 5xx |
 | 6 | `OpenHimResponseWrapper.wrap()` | Wraps response + orchestration log in `application/json+openhim` format |
 
@@ -259,7 +257,7 @@ Errors are handled by `GlobalExceptionHandler` (`@ControllerAdvice`):
 
 | Scenario | Action | HTTP Status |
 |----------|--------|-------------|
-| Unknown source system | Log + reject | 400 with `SOURCE_NOT_RECOGNIZED` |
+| Unknown source system | Log debug + silently ignore | 200 OK (no processing) |
 | FHIR resource unparseable | Log + reject | 400 with `PAYLOAD_PARSE_ERROR` |
 | Patient UPID not extractable | Log + reject | 400 with `PATIENT_ID_NOT_FOUND` |
 | Collector returns 400 | Log + return error | 400 (non-retryable) |

@@ -38,7 +38,7 @@ POST /inbound
 
 > **Note:** This header list is derived from the CCE solution design document and local OpenHIM testing. The actual headers available may change based on the RHIE deployment configuration.
 
-**Body:** Valid FHIR R4 resource JSON. Can be an individual resource (e.g., `Encounter`, `Observation`) or a `Bundle` containing multiple resource entries.
+**Body:** Valid FHIR R4 resource JSON — an individual resource (e.g., `Encounter`, `Observation`). Bundle resources are silently ignored (out of scope for v1.0).
 
 ### Response Format
 
@@ -133,9 +133,9 @@ curl -X POST http://localhost:8082/inbound \
 }
 ```
 
-### 3.2 FHIR Bundle with Multiple Resources
+### 3.2 FHIR Bundle (Out of Scope)
 
-**Result:** When a FHIR Bundle is received, the adaptor extracts each resource entry from the Bundle. Each resource is wrapped in a separate CloudEvent and forwarded individually to the Collector. When an individual FHIR resource (non-Bundle) is received, it is wrapped in a single CloudEvent.
+Bundle resources (`"resourceType": "Bundle"`) are silently ignored — the adaptor returns a 200 OK response with no processing. Bundle support will be added in a future release.
 
 ---
 
@@ -143,21 +143,9 @@ curl -X POST http://localhost:8082/inbound \
 
 Error responses are wrapped in the OpenHIM mediator envelope with `"status": "Failed"`.
 
-### 4.1 Source Not Recognized (400)
+### 4.1 Unrecognized Source (200 — Silently Ignored)
 
-```json
-{
-  "x-mediator-urn": "urn:mediator:cce-emitter-adaptor",
-  "status": "Failed",
-  "response": {
-    "status": 400,
-    "headers": {"Content-Type": "application/json"},
-    "body": "{\"error\":{\"code\":\"SOURCE_NOT_RECOGNIZED\",\"message\":\"No adaptor found for source: unknown\"}}",
-    "timestamp": "2026-02-25T08:00:05Z"
-  },
-  "orchestrations": []
-}
-```
+When no source adaptor matches the inbound request (no `X-OpenHIM-ClientID` or `X-Source-System` header matches any configured source), the adaptor silently ignores the request and returns a `200 OK` response. No error is raised. This is by design — the adaptor sits on a secondary route and receives all traffic on that OpenHIM channel; only matching requests are processed.
 
 ### 4.2 Patient ID Not Found (400)
 

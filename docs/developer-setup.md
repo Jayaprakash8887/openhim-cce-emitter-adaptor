@@ -406,22 +406,14 @@ curl -X POST http://localhost:8082/inbound \
   -H "Content-Type: application/json" \
   -H "X-OpenHIM-ClientID: ebuzima-emr-client" \
   -H "X-Facility-Id: FAC-001" \
+  -H "X-Source-Event-Id: enc-visit-001" \
   -d '{
-    "resourceType": "Bundle",
-    "type": "searchset",
-    "total": 1,
-    "entry": [
-      {
-        "resource": {
-          "resourceType": "Encounter",
-          "id": "enc-visit-001",
-          "status": "finished",
-          "class": {"code": "AMB"},
-          "subject": {"reference": "Patient/PAT-12345"},
-          "period": {"start": "2026-02-25T08:00:00Z"}
-        }
-      }
-    ]
+    "resourceType": "Encounter",
+    "id": "enc-visit-001",
+    "status": "finished",
+    "class": {"code": "AMB"},
+    "subject": {"reference": "Patient/PAT-12345"},
+    "period": {"start": "2026-02-25T08:00:00Z"}
   }'
 ```
 

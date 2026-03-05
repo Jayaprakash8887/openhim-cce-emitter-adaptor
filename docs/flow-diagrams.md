@@ -67,8 +67,7 @@ sequenceDiagram
 
     Ctrl->>SA: adapt(inboundRequest)
     activate SA
-    SA->>SA: Parse FHIR resource
-    SA->>SA: Extract entries if Bundle
+    SA->>SA: Parse FHIR resource (ignore if Bundle)
     SA->>CE: build(fhirResource, patientUpid, type, metadata)
     CE-->>SA: CloudEventDto
     SA-->>Ctrl: List<CloudEventDto>
@@ -83,8 +82,8 @@ sequenceDiagram
         deactivate Fwd
     end
 
-    Ctrl->>Ctrl: BatchResult.fromResults(...)
-    Ctrl->>Wrap: wrap(batchResult, 202, orchestrations)
+    Ctrl->>Ctrl: TransformationResult from forwarding
+    Ctrl->>Wrap: wrap(result, 202, orchestrations)
     Wrap-->>Ctrl: OpenHimResponse
 
     Ctrl-->>OHC: 202 (application/json+openhim)
@@ -101,10 +100,10 @@ flowchart TD
     B -->|No / not set| G{X-Source-System<br/>header?}
 
     G -->|Matches known source| C
-    G -->|No match| J[SourceNotRecognized<br/>Exception → 400]
+    G -->|No match| J[Log debug + silently ignore<br/>→ 200 OK]
 
     style C fill:#e1f5fe
-    style J fill:#ffebee
+    style J fill:#fff3e0
 ```
 
 ## 4. Collector Forwarding with Retry
@@ -202,7 +201,7 @@ flowchart TD
     B -->|No| C[GlobalExceptionHandler<br/>400/500]
     B -->|Yes| D{Adaptor found?}
 
-    D -->|No| E[SourceNotRecognizedException<br/>→ 400 SOURCE_NOT_RECOGNIZED]
+    D -->|No| E[Log debug + silently ignore<br/>→ 200 OK]
     D -->|Yes| F{FHIR resource valid?}
 
     F -->|No| G[SourceAdaptorException<br/>→ 400 PAYLOAD_PARSE_ERROR]
@@ -217,7 +216,7 @@ flowchart TD
     J -->|5xx × 3| N[CollectorForwardingException<br/>→ 502 COLLECTOR_FORWARDING_ERROR]
 
     C --> O[OpenHimResponseWrapper<br/>wraps error in mediator envelope]
-    E --> O
+    E --> P
     G --> O
     I --> O
     K --> O

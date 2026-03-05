@@ -143,21 +143,9 @@ curl -X POST http://localhost:8082/inbound \
 
 Error responses are wrapped in the OpenHIM mediator envelope with `"status": "Failed"`.
 
-### 4.1 Source Not Recognized (400)
+### 4.1 Unrecognized Source (200 — Silently Ignored)
 
-```json
-{
-  "x-mediator-urn": "urn:mediator:cce-emitter-adaptor",
-  "status": "Failed",
-  "response": {
-    "status": 400,
-    "headers": {"Content-Type": "application/json"},
-    "body": "{\"error\":{\"code\":\"SOURCE_NOT_RECOGNIZED\",\"message\":\"No adaptor found for source: unknown\"}}",
-    "timestamp": "2026-02-25T08:00:05Z"
-  },
-  "orchestrations": []
-}
-```
+When no source adaptor matches the inbound request (no `X-OpenHIM-ClientID` or `X-Source-System` header matches any configured source), the adaptor silently ignores the request and returns a `200 OK` response. No error is raised. This is by design — the adaptor sits on a secondary route and receives all traffic on that OpenHIM channel; only matching requests are processed.
 
 ### 4.2 Patient ID Not Found (400)
 

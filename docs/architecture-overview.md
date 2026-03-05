@@ -182,7 +182,6 @@ org.openphc.cce.emitter/
 │   └── CollectorResponse.java                     #   Response DTO from Collector
 │
 ├── exception/                                     # Custom exceptions
-│   ├── SourceNotRecognizedException.java
 │   ├── SourceAdaptorException.java
 │   ├── PatientIdNotFoundException.java
 │   ├── CollectorForwardingException.java
@@ -259,7 +258,7 @@ Errors are handled by `GlobalExceptionHandler` (`@ControllerAdvice`):
 
 | Scenario | Action | HTTP Status |
 |----------|--------|-------------|
-| Unknown source system | Log + reject | 400 with `SOURCE_NOT_RECOGNIZED` |
+| Unknown source system | Log debug + silently ignore | 200 OK (no processing) |
 | FHIR resource unparseable | Log + reject | 400 with `PAYLOAD_PARSE_ERROR` |
 | Patient UPID not extractable | Log + reject | 400 with `PATIENT_ID_NOT_FOUND` |
 | Collector returns 400 | Log + return error | 400 (non-retryable) |

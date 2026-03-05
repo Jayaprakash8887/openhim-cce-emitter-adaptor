@@ -2,7 +2,7 @@
 
 ## Overview
 
-The **CCE Emitter Adaptor** is a generic [OpenHIM mediator](https://openhim.org/) built as a standard **Spring Boot 3.x** application. It is configurable for different source systems — currently configured for **eBUZIMA EMR**. It receives FHIR R4 resource payloads via OpenHIM Core (secondary route), wraps them in CloudEvents v1.0 envelopes, and forwards them to the CCE Collector. The input can be any valid FHIR resource (e.g., Encounter, Observation) or a Bundle.
+The **CCE Emitter Adaptor** is a generic [OpenHIM mediator](https://openhim.org/) built as a standard **Spring Boot 3.x** application. It is configurable for different source systems — currently configured for **eBUZIMA EMR**. It receives FHIR R4 resource payloads via OpenHIM Core (secondary route), wraps them in CloudEvents v1.0 envelopes, and forwards them to the CCE Collector. The input is any valid individual FHIR resource (e.g., Encounter, Observation). Bundle resources are silently ignored (out of scope for v1.0).
 
 **No third-party mediator library is used** — the OpenHIM mediator contract (registration, heartbeat, response envelope) is implemented via custom Spring components.
 
@@ -50,7 +50,7 @@ curl -X POST http://localhost:8082/inbound \
 eBUZIMA EMR → OpenHIM Core → Emitter Adaptor → CCE Collector → Kafka
                                     │
                                     ├── Source Adaptor (header-based routing)
-                                    ├── FHIR resource → parse (extract entries if Bundle)
+                                    ├── FHIR resource → parse (ignore if Bundle)
                                     ├── CloudEvent v1.0 envelope
                                     ├── Forward to Collector (@Retryable)
                                     └── OpenHIM response wrapping

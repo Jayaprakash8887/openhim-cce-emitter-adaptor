@@ -67,8 +67,7 @@ sequenceDiagram
 
     Ctrl->>SA: adapt(inboundRequest)
     activate SA
-    SA->>SA: Parse FHIR resource
-    SA->>SA: Extract entries if Bundle
+    SA->>SA: Parse FHIR resource (ignore if Bundle)
     SA->>CE: build(fhirResource, patientUpid, type, metadata)
     CE-->>SA: CloudEventDto
     SA-->>Ctrl: List<CloudEventDto>
@@ -83,8 +82,8 @@ sequenceDiagram
         deactivate Fwd
     end
 
-    Ctrl->>Ctrl: BatchResult.fromResults(...)
-    Ctrl->>Wrap: wrap(batchResult, 202, orchestrations)
+    Ctrl->>Ctrl: TransformationResult from forwarding
+    Ctrl->>Wrap: wrap(result, 202, orchestrations)
     Wrap-->>Ctrl: OpenHimResponse
 
     Ctrl-->>OHC: 202 (application/json+openhim)

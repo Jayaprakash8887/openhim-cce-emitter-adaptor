@@ -78,6 +78,7 @@ public class MediatorRegistrar {
      */
     MediatorDescriptor buildDescriptor() {
         var mediator = openHimProperties.mediator();
+        var ep = openHimProperties.endpoint();
 
         return MediatorDescriptor.builder()
                 .urn(mediator.urn())
@@ -88,11 +89,11 @@ public class MediatorRegistrar {
                 .endpoints(List.of(
                         MediatorDescriptor.Endpoint.builder()
                                 .name(mediator.name())
-                                .host("emitter-adaptor")
-                                .path("/inbound")
-                                .port(8082)
+                                .host(ep.host())
+                                .path(ep.path())
+                                .port(ep.port())
                                 .primary(true)
-                                .type("http")
+                                .type(ep.type())
                                 .build()
                 ))
                 .build();

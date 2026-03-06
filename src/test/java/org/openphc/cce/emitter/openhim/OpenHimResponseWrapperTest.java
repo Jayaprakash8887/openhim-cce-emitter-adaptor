@@ -30,7 +30,10 @@ class OpenHimResponseWrapperTest {
         var mediatorProps = new OpenHimProperties.MediatorProperties(
                 "urn:mediator:cce-emitter-adaptor", "1.0.0", "CCE Emitter Adaptor");
         var heartbeatProps = new OpenHimProperties.HeartbeatProperties(true, 10);
-        var openHimProperties = new OpenHimProperties(coreProps, mediatorProps, heartbeatProps);
+        var endpointProps = new OpenHimProperties.EndpointProperties(
+                "emitter-adaptor", "/inbound", 8082, "http");
+        var openHimProperties = new OpenHimProperties(coreProps, mediatorProps,
+                heartbeatProps, endpointProps);
 
         wrapper = new OpenHimResponseWrapper(openHimProperties, objectMapper);
     }

@@ -21,6 +21,11 @@ openhim:
   heartbeat:
     enabled: true
     interval-seconds: 10
+  endpoint:
+    host: emitter-adaptor
+    path: /inbound
+    port: 8082
+    type: http
 
 # CCE Collector Configuration
 cce:

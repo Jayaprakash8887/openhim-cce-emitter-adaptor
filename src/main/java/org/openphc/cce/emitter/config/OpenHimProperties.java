@@ -16,7 +16,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record OpenHimProperties(
         CoreProperties core,
         MediatorProperties mediator,
-        HeartbeatProperties heartbeat
+        HeartbeatProperties heartbeat,
+        EndpointProperties endpoint
 ) {
 
     /**
@@ -66,5 +67,20 @@ public record OpenHimProperties(
     public record HeartbeatProperties(
             boolean enabled,
             int intervalSeconds
+    ) {}
+
+    /**
+     * Mediator endpoint settings registered with OpenHIM Core.
+     *
+     * @param host    hostname or container name where the mediator runs (default: {@code emitter-adaptor})
+     * @param path    request path (default: {@code /inbound})
+     * @param port    listen port (default: {@code 8082})
+     * @param type    protocol type — {@code "http"} or {@code "https"} (default: {@code http})
+     */
+    public record EndpointProperties(
+            String host,
+            String path,
+            int port,
+            String type
     ) {}
 }

@@ -136,8 +136,10 @@ org.openphc.cce.emitter/
 │   ├── FhirConfig.java                            #   @Bean FhirContext.forR4() singleton
 │   ├── RestClientConfig.java                      #   @Bean RestClient for Collector + OpenHIM Core
 │   ├── RetryConfig.java                           #   Spring Retry configuration
-│   ├── OpenHimProperties.java                     #   @ConfigurationProperties for openhim.*
-│   └── CollectorProperties.java                   #   @ConfigurationProperties for cce.collector.*
+│   ├── OpenHimProperties.java                     #   @ConfigurationProperties for openhim.* (core + heartbeat)
+│   ├── MediatorProperties.java                    #   @ConfigurationProperties for mediator.* (identity + endpoint)
+│   ├── CollectorProperties.java                   #   @ConfigurationProperties for cce.collector.*
+│   └── EmitterProperties.java                     #   @ConfigurationProperties for cce.emitter.* (source routing)
 │
 ├── controller/                                    # Spring MVC controllers
 │   ├── InboundEventController.java                #   @RestController: POST /inbound

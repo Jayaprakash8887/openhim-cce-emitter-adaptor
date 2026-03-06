@@ -85,7 +85,7 @@ public class MediatorRegistrar {
      * Builds the {@link MediatorDescriptor} from configuration properties.
      */
     MediatorDescriptor buildDescriptor() {
-        var ep = mediatorProperties.endpoint();
+        var mp = mediatorProperties.endpoint();
 
         return MediatorDescriptor.builder()
                 .urn(mediatorProperties.urn())
@@ -96,11 +96,11 @@ public class MediatorRegistrar {
                 .endpoints(List.of(
                         MediatorDescriptor.Endpoint.builder()
                                 .name(mediatorProperties.name())
-                                .host(ep.host())
-                                .path(ep.path())
+                                .host(mp.host())
+                                .path(mp.path())
                                 .port(serverPort)
                                 .primary(true)
-                                .type(ep.type())
+                                .type(mp.type())
                                 .build()
                 ))
                 .build();

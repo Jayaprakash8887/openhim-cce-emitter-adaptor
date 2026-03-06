@@ -1,6 +1,6 @@
 package org.openphc.cce.emitter.openhim;
 
-import org.openphc.cce.emitter.config.OpenHimProperties;
+import org.openphc.cce.emitter.config.MediatorProperties;
 import org.openphc.cce.emitter.openhim.model.HeartbeatRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,14 +26,14 @@ public class HeartbeatScheduler {
     private static final Logger log = LoggerFactory.getLogger(HeartbeatScheduler.class);
 
     private final RestClient coreApiRestClient;
-    private final OpenHimProperties openHimProperties;
+    private final MediatorProperties mediatorProperties;
     private final long startTimeMs;
 
     public HeartbeatScheduler(
             @Qualifier("coreApiRestClient") RestClient coreApiRestClient,
-            OpenHimProperties openHimProperties) {
+            MediatorProperties mediatorProperties) {
         this.coreApiRestClient = coreApiRestClient;
-        this.openHimProperties = openHimProperties;
+        this.mediatorProperties = mediatorProperties;
         this.startTimeMs = System.currentTimeMillis();
     }
 
@@ -44,7 +44,7 @@ public class HeartbeatScheduler {
      */
     @Scheduled(fixedDelayString = "${openhim.heartbeat.interval-seconds:10}000")
     public void sendHeartbeat() {
-        String urn = openHimProperties.mediator().urn();
+        String urn = mediatorProperties.urn();
         long uptime = System.currentTimeMillis() - startTimeMs;
 
         try {

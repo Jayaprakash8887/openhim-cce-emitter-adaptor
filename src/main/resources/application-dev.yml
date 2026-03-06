@@ -1,6 +1,11 @@
 # Development profile — heartbeat disabled, DEBUG logging, local URLs
 server:
   port: 8082
+
+mediator:
+  urn: "urn:mediator:cce-emitter-adaptor"
+  version: "1.0.0"
+  name: "CCE Emitter Adaptor"
   endpoint:
     host: localhost
     path: /inbound
@@ -12,10 +17,6 @@ openhim:
     api-port: 8080
     username: root@openhim.org
     password: openhim-password
-  mediator:
-    urn: "urn:mediator:cce-emitter-adaptor"
-    version: "1.0.0"
-    name: "CCE Emitter Adaptor"
   heartbeat:
     enabled: false
 

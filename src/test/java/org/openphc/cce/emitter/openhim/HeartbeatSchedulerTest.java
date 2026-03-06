@@ -7,7 +7,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.openphc.cce.emitter.config.OpenHimProperties;
+import org.openphc.cce.emitter.config.MediatorProperties;
 import org.openphc.cce.emitter.openhim.model.HeartbeatRequest;
 import org.springframework.web.client.RestClient;
 
@@ -35,14 +35,10 @@ class HeartbeatSchedulerTest {
 
     @BeforeEach
     void setUp() {
-        var coreProps = new OpenHimProperties.CoreProperties("localhost", 8080,
-                "root@openhim.org", "openhim-password");
-        var mediatorProps = new OpenHimProperties.MediatorProperties(
-                "urn:mediator:cce-emitter-adaptor", "1.0.0", "CCE Emitter Adaptor");
-        var heartbeatProps = new OpenHimProperties.HeartbeatProperties(true, 10);
-        var openHimProperties = new OpenHimProperties(coreProps, mediatorProps, heartbeatProps);
+        var mediatorProperties = new MediatorProperties(
+                "urn:mediator:cce-emitter-adaptor", "1.0.0", "CCE Emitter Adaptor", null);
 
-        scheduler = new HeartbeatScheduler(coreApiRestClient, openHimProperties);
+        scheduler = new HeartbeatScheduler(coreApiRestClient, mediatorProperties);
     }
 
     @Test

@@ -2,6 +2,7 @@ package org.openphc.cce.emitter;
 
 import org.openphc.cce.emitter.config.CollectorProperties;
 import org.openphc.cce.emitter.config.EmitterProperties;
+import org.openphc.cce.emitter.config.MediatorProperties;
 import org.openphc.cce.emitter.config.OpenHimProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -10,7 +11,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @EnableScheduling
-@EnableConfigurationProperties({OpenHimProperties.class, CollectorProperties.class, EmitterProperties.class})
+@EnableConfigurationProperties({OpenHimProperties.class, CollectorProperties.class, EmitterProperties.class, MediatorProperties.class})
 public class CceEmitterAdaptorApplication {
 
     public static void main(String[] args) {

@@ -2,6 +2,7 @@ package org.openphc.cce.emitter.openhim;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.openphc.cce.emitter.config.MediatorProperties;
 import org.openphc.cce.emitter.config.OpenHimProperties;
 import org.openphc.cce.emitter.openhim.model.MediatorDescriptor;
 import org.slf4j.Logger;
@@ -35,27 +36,21 @@ public class MediatorRegistrar {
 
     private final RestClient coreApiRestClient;
     private final OpenHimProperties openHimProperties;
+    private final MediatorProperties mediatorProperties;
     private final ObjectMapper objectMapper;
     private final int serverPort;
-    private final String endpointHost;
-    private final String endpointPath;
-    private final String endpointType;
 
     public MediatorRegistrar(
             @Qualifier("coreApiRestClient") RestClient coreApiRestClient,
             OpenHimProperties openHimProperties,
+            MediatorProperties mediatorProperties,
             ObjectMapper objectMapper,
-            @Value("${server.port}") int serverPort,
-            @Value("${server.endpoint.host}") String endpointHost,
-            @Value("${server.endpoint.path}") String endpointPath,
-            @Value("${server.endpoint.type}") String endpointType) {
+            @Value("${server.port}") int serverPort) {
         this.coreApiRestClient = coreApiRestClient;
         this.openHimProperties = openHimProperties;
+        this.mediatorProperties = mediatorProperties;
         this.objectMapper = objectMapper;
         this.serverPort = serverPort;
-        this.endpointHost = endpointHost;
-        this.endpointPath = endpointPath;
-        this.endpointType = endpointType;
     }
 
     /**
@@ -64,7 +59,7 @@ public class MediatorRegistrar {
      */
     @EventListener(ApplicationReadyEvent.class)
     public void register() {
-        String urn = openHimProperties.mediator().urn();
+        String urn = mediatorProperties.urn();
         log.info("Registering mediator '{}' with OpenHIM Core at {}",
                 urn, openHimProperties.core().apiUrl());
 
@@ -90,22 +85,22 @@ public class MediatorRegistrar {
      * Builds the {@link MediatorDescriptor} from configuration properties.
      */
     MediatorDescriptor buildDescriptor() {
-        var mediator = openHimProperties.mediator();
+        var ep = mediatorProperties.endpoint();
 
         return MediatorDescriptor.builder()
-                .urn(mediator.urn())
-                .version(mediator.version())
-                .name(mediator.name())
+                .urn(mediatorProperties.urn())
+                .version(mediatorProperties.version())
+                .name(mediatorProperties.name())
                 .description(MEDIATOR_DESCRIPTION)
                 .defaultChannelConfig(List.of())
                 .endpoints(List.of(
                         MediatorDescriptor.Endpoint.builder()
-                                .name(mediator.name())
-                                .host(endpointHost)
-                                .path(endpointPath)
+                                .name(mediatorProperties.name())
+                                .host(ep.host())
+                                .path(ep.path())
                                 .port(serverPort)
                                 .primary(true)
-                                .type(endpointType)
+                                .type(ep.type())
                                 .build()
                 ))
                 .build();

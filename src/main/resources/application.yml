@@ -2,14 +2,20 @@ server:
   port: 8082
   servlet:
     context-path: /
-  endpoint:
-    host: emitter-adaptor
-    path: /inbound
-    type: http
 
 spring:
   application:
     name: cce-emitter-adaptor
+
+# Mediator Identity & Endpoint
+mediator:
+  urn: "urn:mediator:cce-emitter-adaptor"
+  version: "1.0.0"
+  name: "CCE Emitter Adaptor"
+  endpoint:
+    host: emitter-adaptor
+    path: /inbound
+    type: http
 
 # OpenHIM Core Configuration
 openhim:
@@ -18,10 +24,6 @@ openhim:
     api-port: 8080
     username: root@openhim.org
     password: openhim-password
-  mediator:
-    urn: "urn:mediator:cce-emitter-adaptor"
-    version: "1.0.0"
-    name: "CCE Emitter Adaptor"
   heartbeat:
     enabled: true
     interval-seconds: 10

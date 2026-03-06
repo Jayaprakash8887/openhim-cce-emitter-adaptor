@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import org.openphc.cce.emitter.config.OpenHimProperties;
+import org.openphc.cce.emitter.config.MediatorProperties;
 import org.openphc.cce.emitter.openhim.model.OpenHimResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,11 +30,11 @@ public class OpenHimResponseWrapper {
 
     private static final Logger log = LoggerFactory.getLogger(OpenHimResponseWrapper.class);
 
-    private final OpenHimProperties openHimProperties;
+    private final MediatorProperties mediatorProperties;
     private final ObjectMapper objectMapper;
 
-    public OpenHimResponseWrapper(OpenHimProperties openHimProperties, ObjectMapper objectMapper) {
-        this.openHimProperties = openHimProperties;
+    public OpenHimResponseWrapper(MediatorProperties mediatorProperties, ObjectMapper objectMapper) {
+        this.mediatorProperties = mediatorProperties;
         this.objectMapper = objectMapper;
     }
 
@@ -54,7 +54,7 @@ public class OpenHimResponseWrapper {
         String openHimStatus = resolveStatus(status);
 
         OpenHimResponse response = OpenHimResponse.builder()
-                .mediatorUrn(openHimProperties.mediator().urn())
+                .mediatorUrn(mediatorProperties.urn())
                 .status(openHimStatus)
                 .response(OpenHimResponse.Response.builder()
                         .status(status.value())

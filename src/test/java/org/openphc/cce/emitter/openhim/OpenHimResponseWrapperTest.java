@@ -8,7 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.openphc.cce.emitter.config.OpenHimProperties;
+import org.openphc.cce.emitter.config.MediatorProperties;
 import org.openphc.cce.emitter.openhim.model.OpenHimResponse;
 import org.springframework.http.HttpStatus;
 
@@ -41,14 +41,10 @@ class OpenHimResponseWrapperTest {
 
     @BeforeEach
     void setUp() {
-        var coreProps = new OpenHimProperties.CoreProperties("localhost", 8080,
-                "root@openhim.org", "openhim-password");
-        var mediatorProps = new OpenHimProperties.MediatorProperties(
-                "urn:mediator:cce-emitter-adaptor", "1.0.0", "CCE Emitter Adaptor");
-        var heartbeatProps = new OpenHimProperties.HeartbeatProperties(true, 10);
-        var openHimProperties = new OpenHimProperties(coreProps, mediatorProps, heartbeatProps);
+        var mediatorProperties = new MediatorProperties(
+                "urn:mediator:cce-emitter-adaptor", "1.0.0", "CCE Emitter Adaptor", null);
 
-        wrapper = new OpenHimResponseWrapper(openHimProperties, objectMapper);
+        wrapper = new OpenHimResponseWrapper(mediatorProperties, objectMapper);
     }
 
     @Nested

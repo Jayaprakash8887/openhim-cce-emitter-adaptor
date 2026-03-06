@@ -1,7 +1,5 @@
 package org.openphc.cce.emitter.openhim;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -37,8 +35,6 @@ class MediatorRegistrarTest {
 
     private MediatorRegistrar registrar;
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
-
     @BeforeEach
     void setUp() {
         var coreProps = new OpenHimProperties.CoreProperties("localhost", 8080,
@@ -52,7 +48,7 @@ class MediatorRegistrarTest {
                 "urn:mediator:cce-emitter-adaptor", "1.0.0", "CCE Emitter Adaptor", endpointProps);
 
         registrar = new MediatorRegistrar(coreApiRestClient, openHimProperties,
-                mediatorProperties, objectMapper, 8082);
+                mediatorProperties, 8082);
     }
 
     @Test
@@ -60,7 +56,7 @@ class MediatorRegistrarTest {
     void shouldPostDescriptorOnRegistration() {
         when(coreApiRestClient.post()).thenReturn(requestBodyUriSpec);
         when(requestBodyUriSpec.uri(eq("/mediators"))).thenReturn(requestBodySpec);
-        when(requestBodySpec.body(any(String.class))).thenReturn(requestBodySpec);
+        when(requestBodySpec.body(any(MediatorDescriptor.class))).thenReturn(requestBodySpec);
         when(requestBodySpec.retrieve()).thenReturn(responseSpec);
         when(responseSpec.toBodilessEntity()).thenReturn(null);
 
@@ -68,7 +64,7 @@ class MediatorRegistrarTest {
 
         verify(coreApiRestClient).post();
         verify(requestBodyUriSpec).uri("/mediators");
-        verify(requestBodySpec).body(any(String.class));
+        verify(requestBodySpec).body(any(MediatorDescriptor.class));
     }
 
     @Test
@@ -113,9 +109,9 @@ class MediatorRegistrarTest {
     }
 
     @Test
-    @DisplayName("should serialize descriptor body as valid JSON")
-    void shouldSerializeDescriptorAsJson() {
-        ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
+    @DisplayName("should pass descriptor object to RestClient body")
+    void shouldPassDescriptorToRestClient() {
+        ArgumentCaptor<MediatorDescriptor> bodyCaptor = ArgumentCaptor.forClass(MediatorDescriptor.class);
 
         when(coreApiRestClient.post()).thenReturn(requestBodyUriSpec);
         when(requestBodyUriSpec.uri(eq("/mediators"))).thenReturn(requestBodySpec);
@@ -125,9 +121,9 @@ class MediatorRegistrarTest {
 
         registrar.register();
 
-        String json = bodyCaptor.getValue();
-        assertThat(json).contains("urn:mediator:cce-emitter-adaptor");
-        assertThat(json).contains("\"defaultChannelConfig\":[]");
-        assertThat(json).contains("\"endpoints\":");
+        MediatorDescriptor descriptor = bodyCaptor.getValue();
+        assertThat(descriptor.getUrn()).isEqualTo("urn:mediator:cce-emitter-adaptor");
+        assertThat(descriptor.getDefaultChannelConfig()).isEmpty();
+        assertThat(descriptor.getEndpoints()).hasSize(1);
     }
 }

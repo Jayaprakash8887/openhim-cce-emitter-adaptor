@@ -1,7 +1,5 @@
 package org.openphc.cce.emitter.openhim;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import org.openphc.cce.emitter.config.MediatorProperties;
 import org.openphc.cce.emitter.config.OpenHimProperties;
 import org.openphc.cce.emitter.openhim.model.MediatorDescriptor;
@@ -37,19 +35,16 @@ public class MediatorRegistrar {
     private final RestClient coreApiRestClient;
     private final OpenHimProperties openHimProperties;
     private final MediatorProperties mediatorProperties;
-    private final ObjectMapper objectMapper;
     private final int serverPort;
 
     public MediatorRegistrar(
             @Qualifier("coreApiRestClient") RestClient coreApiRestClient,
             OpenHimProperties openHimProperties,
             MediatorProperties mediatorProperties,
-            ObjectMapper objectMapper,
             @Value("${server.port}") int serverPort) {
         this.coreApiRestClient = coreApiRestClient;
         this.openHimProperties = openHimProperties;
         this.mediatorProperties = mediatorProperties;
-        this.objectMapper = objectMapper;
         this.serverPort = serverPort;
     }
 
@@ -65,11 +60,10 @@ public class MediatorRegistrar {
 
         try {
             MediatorDescriptor descriptor = buildDescriptor();
-            String body = objectMapper.writeValueAsString(descriptor);
 
             coreApiRestClient.post()
                     .uri("/mediators")
-                    .body(body)
+                    .body(descriptor)
                     .retrieve()
                     .toBodilessEntity();
 

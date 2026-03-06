@@ -158,7 +158,6 @@ public class SourceAdaptorService {
 
         // Build source metadata from headers
         SourceMetadata metadata = buildSourceMetadata(request, sourceKey);
-        request.setMetadata(metadata);
 
         // Build CloudEvent
         CloudEventDto event = cloudEventEnvelopeBuilder.build(body, patientUpid, resourceType, metadata);

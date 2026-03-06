@@ -37,7 +37,6 @@ dependencies {
     // HAPI FHIR
     implementation("ca.uhn.hapi.fhir:hapi-fhir-base:$hapiFhirVersion")
     implementation("ca.uhn.hapi.fhir:hapi-fhir-structures-r4:$hapiFhirVersion")
-    implementation("ca.uhn.hapi.fhir:hapi-fhir-validation:$hapiFhirVersion")
 
     // Observability
     implementation("io.micrometer:micrometer-registry-prometheus")

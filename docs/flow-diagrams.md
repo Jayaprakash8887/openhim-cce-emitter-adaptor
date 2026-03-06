@@ -193,7 +193,7 @@ flowchart TD
     D -->|No| E[Log debug + silently ignore<br/>→ 200 OK]
     D -->|Yes| F{FHIR resource valid?}
 
-    F -->|No| G[SourceAdaptorException<br/>→ 400 PAYLOAD_PARSE_ERROR]
+    F -->|No| G[FhirMappingException<br/>→ 422 FHIR_MAPPING_ERROR]
     F -->|Yes| H{Patient ID found?}
 
     H -->|No| I[PatientIdNotFoundException<br/>→ 400 PATIENT_ID_NOT_FOUND]
@@ -228,7 +228,6 @@ flowchart TD
 ```mermaid
 flowchart TD
     CTRL[InboundEventController]
-    NORM[EventProcessingService]
     REG[SourceAdaptorService]
     FWD[CollectorForwardingService]
     WRAP[OpenHimResponseWrapper]
@@ -246,11 +245,10 @@ flowchart TD
     FC["FhirConfig<br/>@Bean FhirContext"]
     RC["RestClientConfig<br/>@Bean RestClient"]
 
-    CTRL --> NORM
+    CTRL --> REG
     CTRL --> FWD
     CTRL --> WRAP
 
-    NORM --> REG
     REG --> SA_ABS
 
     SA_ABS --> CE

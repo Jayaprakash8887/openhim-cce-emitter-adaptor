@@ -107,24 +107,6 @@ class InboundRequestTest {
     }
 
     @Test
-    void metadataShouldBeNullByDefault() {
-        InboundRequest request = InboundRequest.from("body", Map.of(), "/inbound");
-
-        assertThat(request.getMetadata()).isNull();
-    }
-
-    @Test
-    void metadataShouldBeSettable() {
-        InboundRequest request = InboundRequest.from("body", Map.of(), "/inbound");
-        SourceMetadata metadata = new SourceMetadata("ebuzima", "FAC-001", null, "corr-1", null, "/inbound");
-
-        request.setMetadata(metadata);
-
-        assertThat(request.getMetadata()).isSameAs(metadata);
-        assertThat(request.getMetadata().sourceIdentifier()).isEqualTo("ebuzima");
-    }
-
-    @Test
     void fromShouldHandleDuplicateHeaderKeysGracefully() {
         // When headers have keys that normalize to the same lowercase key,
         // the first value wins (per Collectors.toMap merge function)

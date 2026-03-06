@@ -19,7 +19,6 @@ public class InboundRequest {
     private final String body;
     private final Map<String, String> headers;
     private final String path;
-    private SourceMetadata metadata;
 
     private InboundRequest(String body, Map<String, String> headers, String path) {
         this.body = body;
@@ -38,13 +37,7 @@ public class InboundRequest {
      * @return a new InboundRequest instance
      */
     public static InboundRequest from(String body, Map<String, String> headers, HttpServletRequest request) {
-        Map<String, String> normalizedHeaders = headers.entrySet().stream()
-                .collect(Collectors.toMap(
-                        e -> e.getKey().toLowerCase(),
-                        Map.Entry::getValue,
-                        (existing, replacement) -> existing
-                ));
-        return new InboundRequest(body, Collections.unmodifiableMap(normalizedHeaders), request.getRequestURI());
+        return new InboundRequest(body, normalizeHeaders(headers), request.getRequestURI());
     }
 
     /**
@@ -56,13 +49,21 @@ public class InboundRequest {
      * @return a new InboundRequest instance
      */
     public static InboundRequest from(String body, Map<String, String> headers, String path) {
-        Map<String, String> normalizedHeaders = headers.entrySet().stream()
-                .collect(Collectors.toMap(
-                        e -> e.getKey().toLowerCase(),
-                        Map.Entry::getValue,
-                        (existing, replacement) -> existing
-                ));
-        return new InboundRequest(body, Collections.unmodifiableMap(normalizedHeaders), path);
+        return new InboundRequest(body, normalizeHeaders(headers), path);
+    }
+
+    /**
+     * Normalizes header keys to lowercase for consistent case-insensitive lookup.
+     */
+    private static Map<String, String> normalizeHeaders(Map<String, String> headers) {
+        return Collections.unmodifiableMap(
+                headers.entrySet().stream()
+                        .collect(Collectors.toMap(
+                                e -> e.getKey().toLowerCase(),
+                                Map.Entry::getValue,
+                                (existing, replacement) -> existing
+                        ))
+        );
     }
 
     /**
@@ -98,19 +99,5 @@ public class InboundRequest {
     /** @return the request URI path */
     public String getPath() {
         return path;
-    }
-
-    /** @return the attached source metadata, or null if not yet set */
-    public SourceMetadata getMetadata() {
-        return metadata;
-    }
-
-    /**
-     * Attaches resolved source metadata to this request.
-     *
-     * @param metadata the source metadata to attach
-     */
-    public void setMetadata(SourceMetadata metadata) {
-        this.metadata = metadata;
     }
 }

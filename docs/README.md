@@ -13,7 +13,7 @@ The **CCE Emitter Adaptor** is a generic [OpenHIM mediator](https://openhim.org/
 | Java | 21 LTS | Runtime |
 | Spring Boot | 3.4.x | Application framework |
 | Gradle | 8.x (Kotlin DSL) | Build tool |
-| HAPI FHIR | 7.4.0 | FHIR R4 parsing & validation |
+| HAPI FHIR | 7.4.0 | FHIR R4 parsing & construction |
 | Spring Retry | — | Retry with exponential backoff |
 | Micrometer + Prometheus | — | Metrics & monitoring |
 | WireMock | 3.9.x | Integration test stubs |
@@ -78,7 +78,7 @@ src/main/java/org/openphc/cce/emitter/
 ├── adaptor/           # SourceAdaptorService (config-driven source routing)
 ├── cloudevents/       # CloudEventEnvelopeBuilder, EventIdGenerator
 ├── fhir/              # FhirResourceParser, PatientIdExtractor
-├── service/           # EventProcessingService, CollectorForwardingService
+├── service/           # CollectorForwardingService
 ├── model/             # DTOs (CloudEventDto, InboundRequest, etc.)
 └── exception/         # Custom exceptions + GlobalExceptionHandler
 ```

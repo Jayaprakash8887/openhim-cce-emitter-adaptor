@@ -68,7 +68,8 @@ For the full list of inbound headers, see [API Reference — §2.1 POST /inbound
 | `body` | String | HTTP body | Raw request body |
 | `headers` | Map<String, String> | HTTP headers (normalized to lowercase keys) | All request headers |
 | `path` | String | `HttpServletRequest.getRequestURI()` | Request path |
-| `metadata` | SourceMetadata | Extracted from headers + path | Structured source context |
+
+> **Note:** `InboundRequest` is immutable — created via static `from()` factory methods. Source metadata (`SourceMetadata`) is built separately in `SourceAdaptorService` from request headers.
 
 ### 2.3 SourceMetadata Fields
 

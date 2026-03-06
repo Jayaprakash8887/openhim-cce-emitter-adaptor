@@ -142,8 +142,7 @@ org.openphc.cce.emitter/
 │   └── EmitterProperties.java                     #   @ConfigurationProperties for cce.emitter.* (source routing)
 │
 ├── controller/                                    # Spring MVC controllers
-│   ├── InboundEventController.java                #   @RestController: POST /inbound
-│   └── HealthController.java                      #   Custom health info (supplements Actuator)
+│   └── InboundEventController.java                #   @RestController: POST /inbound
 │
 ├── openhim/                                       # OpenHIM mediator integration
 │   ├── MediatorRegistrar.java                     #   Registers mediator with OpenHIM Core on startup
@@ -162,14 +161,11 @@ org.openphc.cce.emitter/
 │   └── EventIdGenerator.java                      #   Deterministic ID from source + sourceEventId
 │
 ├── fhir/                                          # FHIR utilities
-│   ├── FhirResourceParser.java                    #   HAPI FHIR parse + type detection
-│   ├── FhirResourceValidator.java                 #   Structural validation before forwarding
+│   ├── FhirResourceParser.java                    #   HAPI FHIR parse (uses FhirContext.forR4())
 │   └── PatientIdExtractor.java                    #   Extract patient UPID from FHIR resources
 │
 ├── service/                                       # Business logic
-│   ├── EventProcessingService.java                #   Orchestrator: parse FHIR → build CloudEvents → forward
-│   ├── CollectorForwardingService.java            #   @Retryable: POST to Collector via RestClient
-│   └── CollectorResponseHandler.java              #   Parse Collector response, determine retry
+│   └── CollectorForwardingService.java            #   @Retryable: POST to Collector via RestClient
 │
 ├── model/                                         # DTOs
 │   ├── CloudEventDto.java                         #   CloudEvents v1.0 output DTO
@@ -179,13 +175,14 @@ org.openphc.cce.emitter/
 │   └── CollectorResponse.java                     #   Response DTO from Collector
 │
 ├── exception/                                     # Custom exceptions
-│   ├── SourceAdaptorException.java
-│   ├── PatientIdNotFoundException.java
-│   ├── CollectorForwardingException.java
+│   ├── FhirMappingException.java                  #   FHIR parsing failures → 422
+│   ├── PatientIdNotFoundException.java            #   Patient UPID not extractable → 400
+│   ├── CollectorForwardingException.java          #   Retryable Collector errors (5xx/timeout) → 502
+│   ├── CollectorClientException.java              #   Non-retryable Collector errors (4xx)
 │   └── GlobalExceptionHandler.java                #   @ControllerAdvice for consistent error responses
 ```
 
-**Estimated: ~26 source files** across 8 packages.
+**~31 source files** across 8 packages.
 
 ## 7. Request Processing Pipeline
 
@@ -246,7 +243,7 @@ Errors are handled by `GlobalExceptionHandler` (`@ControllerAdvice`):
 | Scenario | Action | HTTP Status |
 |----------|--------|-------------|
 | Unknown source system | Log debug + silently ignore | 200 OK (no processing) |
-| FHIR resource unparseable | Log + reject | 400 with `PAYLOAD_PARSE_ERROR` |
+| FHIR resource unparseable | Log + reject | 422 with `FHIR_MAPPING_ERROR` |
 | Patient UPID not extractable | Log + reject | 400 with `PATIENT_ID_NOT_FOUND` |
 | Collector returns 400 | Log + return error | 400 (non-retryable) |
 | Collector returns 422 | Log + return error | 422 (non-retryable) |

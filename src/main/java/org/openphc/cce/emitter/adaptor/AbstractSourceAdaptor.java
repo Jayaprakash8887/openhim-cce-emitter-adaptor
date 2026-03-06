@@ -42,7 +42,6 @@ public abstract class AbstractSourceAdaptor implements SourceAdaptor {
     private static final String HEADER_FACILITY_ID = "x-facility-id";
     private static final String HEADER_SOURCE_EVENT_ID = "x-source-event-id";
     private static final String HEADER_CORRELATION_ID = "x-correlation-id";
-    private static final String HEADER_AUTHORIZATION = "authorization";
 
     private final String sourceKey;
     private final String clientId;
@@ -160,7 +159,6 @@ public abstract class AbstractSourceAdaptor implements SourceAdaptor {
         String sourceEventId = request.getHeader(HEADER_SOURCE_EVENT_ID).orElse(null);
         String correlationId = request.getHeader(HEADER_CORRELATION_ID)
                 .orElseGet(() -> UUID.randomUUID().toString());
-        String authorizationHeader = request.getHeader(HEADER_AUTHORIZATION).orElse(null);
 
         return new SourceMetadata(
                 sourceKey,
@@ -168,8 +166,7 @@ public abstract class AbstractSourceAdaptor implements SourceAdaptor {
                 sourceEventId,
                 correlationId,
                 OffsetDateTime.now(ZoneOffset.UTC),
-                request.getPath(),
-                authorizationHeader
+                request.getPath()
         );
     }
 }

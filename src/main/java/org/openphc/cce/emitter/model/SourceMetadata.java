@@ -2,8 +2,6 @@ package org.openphc.cce.emitter.model;
 
 import java.time.OffsetDateTime;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-
 /**
  * Structured metadata extracted from inbound request headers and context.
  *
@@ -16,7 +14,6 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
  * @param correlationId       trace correlation ID from {@code X-Correlation-Id} header or adaptor-generated (nullable on input)
  * @param eventTime           when the adaptor received the event (UTC)
  * @param sourcePath          request URI path (e.g., {@code "/inbound"})
- * @param authorizationHeader authorization header from inbound request — passed through to Collector, not serialized into CloudEvent
  */
 public record SourceMetadata(
         String sourceIdentifier,
@@ -24,6 +21,5 @@ public record SourceMetadata(
         String sourceEventId,
         String correlationId,
         OffsetDateTime eventTime,
-        String sourcePath,
-        @JsonIgnore String authorizationHeader
+        String sourcePath
 ) {}

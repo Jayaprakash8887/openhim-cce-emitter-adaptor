@@ -42,11 +42,16 @@ public class RestClientConfig {
         requestFactory.setConnectTimeout(Duration.ofMillis(properties.timeout()));
         requestFactory.setReadTimeout(Duration.ofMillis(properties.timeout()));
 
-        return RestClient.builder()
+        var builder = RestClient.builder()
                 .baseUrl(properties.url())
                 .defaultHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE)
-                .requestFactory(requestFactory)
-                .build();
+                .requestFactory(requestFactory);
+
+        if (properties.auth() != null && properties.auth().token() != null) {
+            builder.defaultHeader("Authorization", "Bearer " + properties.auth().token());
+        }
+
+        return builder.build();
     }
 
     /**

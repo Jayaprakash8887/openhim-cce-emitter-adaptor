@@ -37,6 +37,8 @@ cce:
     retry:
       max-attempts: 3
       backoff-ms: 1000
+    auth:
+      token: local-dev-token
   emitter:
     sources:
       ebuzima:

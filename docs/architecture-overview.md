@@ -64,8 +64,8 @@ The Emitter Adaptor is a generic **OpenHIM mediator** built as a standalone **Sp
 |-----------|-------------|
 | **Spring Boot Standard** | Standard Spring Boot application — embedded Tomcat, DI, `@ConfigurationProperties`, Actuator health/metrics |
 | **Stateless** | No local database; no session state; all context derived from inbound request |
-| **Single Responsibility** | Generic adaptor configurable per source via `SourceAdaptor` interface — currently eBUZIMA |
-| **Open/Closed** | Additional sources can be supported by implementing `SourceAdaptor` and annotating `@Component` — auto-discovered, or via configuration changes |
+| **Single Responsibility** | Generic adaptor configurable per source via `cce.emitter.sources` config — currently eBUZIMA |
+| **Open/Closed** | Additional sources added by configuration changes to `cce.emitter.sources` — no code changes needed |
 | **Idempotent Output** | Same source event always produces the same CloudEvents `id` — Collector handles dedup |
 | **Fail-Fast** | Invalid payloads rejected immediately with descriptive errors |
 | **Retry with Backoff** | Collector forwarding uses Spring Retry with exponential backoff on 5xx/timeout |
@@ -155,9 +155,7 @@ org.openphc.cce.emitter/
 │       └── OpenHimResponse.java                   #   Mediator response envelope model
 │
 ├── adaptor/                                       # Source system adaptors
-│   ├── SourceAdaptor.java                         #   Interface: canHandle + adapt + getSourceIdentifier
-│   ├── SourceAdaptorRegistry.java                 #   Finds correct adaptor (injected List<SourceAdaptor>)
-│   └── AbstractSourceAdaptor.java                 #   Base class: FHIR resource parsing + CloudEvents building
+│   └── SourceAdaptorService.java                  #   Resolves source from config, FHIR parsing + CloudEvents building
 │
 ├── cloudevents/                                   # CloudEvents envelope construction
 │   ├── CloudEventEnvelopeBuilder.java             #   Builds CloudEvents v1.0 JSON
@@ -191,15 +189,9 @@ org.openphc.cce.emitter/
 
 ## 7. Request Processing Pipeline
 
-### 7.1 SourceAdaptor Interface
+### 7.1 SourceAdaptorService
 
-```java
-public interface SourceAdaptor {
-    boolean canHandle(InboundRequest request);
-    List<CloudEventDto> adapt(InboundRequest request);
-    String getSourceIdentifier();
-}
-```
+Single `@Component` that reads `cce.emitter.sources` config (sourceKey → clientId mapping), resolves the source system from request headers, and transforms FHIR R4 resources into CloudEvents.
 
 ### 7.2 Processing Steps
 
@@ -207,8 +199,8 @@ public interface SourceAdaptor {
 |------|-----------|-------------|
 | 1 | `InboundEventController` | Receives HTTP POST, extracts body, headers, path |
 | 2 | `InboundRequest.from()` | Wraps raw data into domain object with `SourceMetadata` |
-| 3 | `SourceAdaptorRegistry.findAdaptor()` | Iterates registered `@Component` adaptors; first `canHandle()` match wins |
-| 4 | `SourceAdaptor.adapt()` | Parses FHIR resource, builds `List<CloudEventDto>` (Bundle resources are silently ignored) |
+| 3 | `SourceAdaptorService.resolveSource()` | Matches `X-OpenHIM-ClientID` / `X-Source-System` headers against configured sources |
+| 4 | `SourceAdaptorService.adapt()` | Parses FHIR resource, builds `List<CloudEventDto>` (Bundle resources are silently ignored) |
 | 5 | `CollectorForwardingService.forward()` | POSTs each CloudEvent to Collector via `RestClient`; `@Retryable` on 5xx |
 | 6 | `OpenHimResponseWrapper.wrap()` | Wraps response + orchestration log in `application/json+openhim` format |
 
@@ -268,7 +260,7 @@ Errors are handled by `GlobalExceptionHandler` (`@ControllerAdvice`):
 |---------|-----------|
 | **OpenHIM ↔ Mediator** | OpenHIM Core routes requests via existing eBUZIMA channel (secondary route); mediator trusts OpenHIM channel auth |
 | **Mediator → OpenHIM Core API** | Basic auth (`root@openhim.org` / password) for registration + heartbeat |
-| **Mediator → CCE Collector** | Authorization header passed through from inbound request. CCE Gateway validates the token (OAuth scope: `events:write`). |
+| **Mediator → CCE Collector** | Static Bearer token configured in `cce.collector.auth.token`. Emitter authenticates independently with the CCE Gateway (separate trust boundary from inbound OpenHIM auth). |
 | **TLS** | HTTPS connections configurable via Spring Boot `server.ssl.*` properties |
 
 ## 12. Deployment

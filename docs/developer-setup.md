@@ -178,6 +178,8 @@ cce:
     retry:
       max-attempts: 3
       backoff-ms: 1000
+    auth:
+      token: local-dev-token
   emitter:
     sources:
       ebuzima:
@@ -233,6 +235,8 @@ openhim:
 cce:
   collector:
     url: http://localhost:5001
+    auth:
+      token: dev-token
   emitter:
     sources:
       ebuzima:
@@ -272,6 +276,8 @@ cce:
   collector:
     url: ${CCE_COLLECTOR_URL}
     timeout: ${CCE_COLLECTOR_TIMEOUT:5000}
+    auth:
+      token: ${CCE_COLLECTOR_AUTH_TOKEN}
   emitter:
     sources:
       ebuzima:

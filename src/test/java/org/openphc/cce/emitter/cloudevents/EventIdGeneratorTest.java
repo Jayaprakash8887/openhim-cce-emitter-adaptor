@@ -27,7 +27,7 @@ class EventIdGeneratorTest {
     void generate_withSourceEventId_returnsDeterministicUuid() {
         SourceMetadata meta = new SourceMetadata(
                 "ebuzima", "0002", "enc-visit-001", "corr-123",
-                OffsetDateTime.now(ZoneOffset.UTC), "/inbound", null);
+                OffsetDateTime.now(ZoneOffset.UTC), "/inbound");
 
         String id1 = generator.generate(meta);
         String id2 = generator.generate(meta);
@@ -40,7 +40,7 @@ class EventIdGeneratorTest {
     void generate_withSourceEventId_producesValidUuidFormat() {
         SourceMetadata meta = new SourceMetadata(
                 "ebuzima", "0002", "enc-visit-001", "corr-123",
-                OffsetDateTime.now(ZoneOffset.UTC), "/inbound", null);
+                OffsetDateTime.now(ZoneOffset.UTC), "/inbound");
 
         String id = generator.generate(meta);
 
@@ -52,10 +52,10 @@ class EventIdGeneratorTest {
     void generate_withDifferentSourceEventId_returnsDifferentIds() {
         SourceMetadata meta1 = new SourceMetadata(
                 "ebuzima", "0002", "enc-visit-001", "corr-123",
-                OffsetDateTime.now(ZoneOffset.UTC), "/inbound", null);
+                OffsetDateTime.now(ZoneOffset.UTC), "/inbound");
         SourceMetadata meta2 = new SourceMetadata(
                 "ebuzima", "0002", "enc-visit-002", "corr-456",
-                OffsetDateTime.now(ZoneOffset.UTC), "/inbound", null);
+                OffsetDateTime.now(ZoneOffset.UTC), "/inbound");
 
         String id1 = generator.generate(meta1);
         String id2 = generator.generate(meta2);
@@ -67,10 +67,10 @@ class EventIdGeneratorTest {
     void generate_withDifferentSourceIdentifier_returnsDifferentIds() {
         SourceMetadata meta1 = new SourceMetadata(
                 "ebuzima", "0002", "enc-visit-001", "corr-123",
-                OffsetDateTime.now(ZoneOffset.UTC), "/inbound", null);
+                OffsetDateTime.now(ZoneOffset.UTC), "/inbound");
         SourceMetadata meta2 = new SourceMetadata(
                 "other-source", "0002", "enc-visit-001", "corr-123",
-                OffsetDateTime.now(ZoneOffset.UTC), "/inbound", null);
+                OffsetDateTime.now(ZoneOffset.UTC), "/inbound");
 
         String id1 = generator.generate(meta1);
         String id2 = generator.generate(meta2);
@@ -82,7 +82,7 @@ class EventIdGeneratorTest {
     void generate_withSameInputs_isIdempotent() {
         SourceMetadata meta = new SourceMetadata(
                 "ebuzima", "0002", "enc-visit-001", "corr-123",
-                OffsetDateTime.of(2026, 2, 25, 8, 0, 0, 0, ZoneOffset.UTC), "/inbound", null);
+                OffsetDateTime.of(2026, 2, 25, 8, 0, 0, 0, ZoneOffset.UTC), "/inbound");
 
         // Generate multiple times — should always return the same UUID
         String id1 = generator.generate(meta);
@@ -98,7 +98,7 @@ class EventIdGeneratorTest {
     void generate_withNullSourceEventId_returnsRandomUuid() {
         SourceMetadata meta = new SourceMetadata(
                 "ebuzima", "0002", null, "corr-123",
-                OffsetDateTime.now(ZoneOffset.UTC), "/inbound", null);
+                OffsetDateTime.now(ZoneOffset.UTC), "/inbound");
 
         String id1 = generator.generate(meta);
         String id2 = generator.generate(meta);
@@ -113,7 +113,7 @@ class EventIdGeneratorTest {
     void generate_withBlankSourceEventId_returnsRandomUuid() {
         SourceMetadata meta = new SourceMetadata(
                 "ebuzima", "0002", "   ", "corr-123",
-                OffsetDateTime.now(ZoneOffset.UTC), "/inbound", null);
+                OffsetDateTime.now(ZoneOffset.UTC), "/inbound");
 
         String id1 = generator.generate(meta);
         String id2 = generator.generate(meta);
@@ -134,7 +134,7 @@ class EventIdGeneratorTest {
     void generate_randomUuid_producesValidUuidFormat() {
         SourceMetadata meta = new SourceMetadata(
                 "ebuzima", "0002", null, null,
-                OffsetDateTime.now(ZoneOffset.UTC), "/inbound", null);
+                OffsetDateTime.now(ZoneOffset.UTC), "/inbound");
 
         String id = generator.generate(meta);
 

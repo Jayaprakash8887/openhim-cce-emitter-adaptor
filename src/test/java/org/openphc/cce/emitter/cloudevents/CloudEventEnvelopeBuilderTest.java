@@ -53,7 +53,7 @@ class CloudEventEnvelopeBuilderTest {
     void build_withAllFields_populatesAllCloudEventFields() {
         SourceMetadata meta = new SourceMetadata(
                 "ebuzima", "0002", "enc-visit-001", "corr-123",
-                EVENT_TIME, "/inbound", "Bearer token123");
+                EVENT_TIME, "/inbound");
 
         CloudEventDto event = builder.build(FHIR_ENCOUNTER_JSON, "260225-0002-5501", "Encounter", meta);
 
@@ -76,7 +76,7 @@ class CloudEventEnvelopeBuilderTest {
     void build_setsTypeToResourceTypeAsIs() {
         SourceMetadata meta = new SourceMetadata(
                 "ebuzima", null, null, null,
-                EVENT_TIME, "/inbound", null);
+                EVENT_TIME, "/inbound");
 
         CloudEventDto event = builder.build(FHIR_ENCOUNTER_JSON, "260225-0002-5501", "Encounter", meta);
 
@@ -96,7 +96,7 @@ class CloudEventEnvelopeBuilderTest {
                 """;
         SourceMetadata meta = new SourceMetadata(
                 "ebuzima", null, null, null,
-                EVENT_TIME, "/inbound", null);
+                EVENT_TIME, "/inbound");
 
         CloudEventDto event = builder.build(observationJson, "260225-0002-5501", "Observation", meta);
 
@@ -109,7 +109,7 @@ class CloudEventEnvelopeBuilderTest {
     void build_dataFieldContainsFhirResource() throws Exception {
         SourceMetadata meta = new SourceMetadata(
                 "ebuzima", null, null, null,
-                EVENT_TIME, "/inbound", null);
+                EVENT_TIME, "/inbound");
 
         CloudEventDto event = builder.build(FHIR_ENCOUNTER_JSON, "260225-0002-5501", "Encounter", meta);
 
@@ -126,7 +126,7 @@ class CloudEventEnvelopeBuilderTest {
     void build_withSourceEventId_generatesDeterministicId() {
         SourceMetadata meta = new SourceMetadata(
                 "ebuzima", "0002", "enc-visit-001", "corr-123",
-                EVENT_TIME, "/inbound", null);
+                EVENT_TIME, "/inbound");
 
         CloudEventDto event1 = builder.build(FHIR_ENCOUNTER_JSON, "260225-0002-5501", "Encounter", meta);
         CloudEventDto event2 = builder.build(FHIR_ENCOUNTER_JSON, "260225-0002-5501", "Encounter", meta);
@@ -140,7 +140,7 @@ class CloudEventEnvelopeBuilderTest {
     void build_withoutSourceEventId_generatesRandomId() {
         SourceMetadata meta = new SourceMetadata(
                 "ebuzima", "0002", null, "corr-123",
-                EVENT_TIME, "/inbound", null);
+                EVENT_TIME, "/inbound");
 
         CloudEventDto event1 = builder.build(FHIR_ENCOUNTER_JSON, "260225-0002-5501", "Encounter", meta);
         CloudEventDto event2 = builder.build(FHIR_ENCOUNTER_JSON, "260225-0002-5501", "Encounter", meta);
@@ -154,7 +154,7 @@ class CloudEventEnvelopeBuilderTest {
     void build_withNullOptionalFields_leavesFieldsNull() {
         SourceMetadata meta = new SourceMetadata(
                 "ebuzima", null, null, null,
-                EVENT_TIME, "/inbound", null);
+                EVENT_TIME, "/inbound");
 
         CloudEventDto event = builder.build(FHIR_ENCOUNTER_JSON, "260225-0002-5501", "Encounter", meta);
 
@@ -171,7 +171,7 @@ class CloudEventEnvelopeBuilderTest {
     void build_withNullEventTime_setsTimeToNull() {
         SourceMetadata meta = new SourceMetadata(
                 "ebuzima", null, null, null,
-                null, "/inbound", null);
+                null, "/inbound");
 
         CloudEventDto event = builder.build(FHIR_ENCOUNTER_JSON, "260225-0002-5501", "Encounter", meta);
 
@@ -184,7 +184,7 @@ class CloudEventEnvelopeBuilderTest {
     void build_invalidJson_throwsFhirMappingException() {
         SourceMetadata meta = new SourceMetadata(
                 "ebuzima", null, null, null,
-                EVENT_TIME, "/inbound", null);
+                EVENT_TIME, "/inbound");
 
         assertThatThrownBy(() -> builder.build("not valid json", "260225-0002-5501", "Encounter", meta))
                 .isInstanceOf(FhirMappingException.class)
@@ -197,7 +197,7 @@ class CloudEventEnvelopeBuilderTest {
     void build_alwaysSetsSpecversion() {
         SourceMetadata meta = new SourceMetadata(
                 "ebuzima", null, null, null,
-                EVENT_TIME, "/inbound", null);
+                EVENT_TIME, "/inbound");
 
         CloudEventDto event = builder.build(FHIR_ENCOUNTER_JSON, "260225-0002-5501", "Encounter", meta);
 
@@ -210,7 +210,7 @@ class CloudEventEnvelopeBuilderTest {
     void build_alwaysSetsDataContentType() {
         SourceMetadata meta = new SourceMetadata(
                 "ebuzima", null, null, null,
-                EVENT_TIME, "/inbound", null);
+                EVENT_TIME, "/inbound");
 
         CloudEventDto event = builder.build(FHIR_ENCOUNTER_JSON, "260225-0002-5501", "Encounter", meta);
 

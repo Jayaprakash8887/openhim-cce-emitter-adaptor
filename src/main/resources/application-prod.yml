@@ -29,6 +29,8 @@ cce:
     retry:
       max-attempts: ${CCE_COLLECTOR_RETRY_MAX_ATTEMPTS:3}
       backoff-ms: ${CCE_COLLECTOR_RETRY_BACKOFF_MS:1000}
+    auth:
+      token: ${CCE_COLLECTOR_AUTH_TOKEN}
   emitter:
     sources:
       ebuzima:

@@ -11,13 +11,15 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param eventsPath events endpoint path (default: {@code /v1/events})
  * @param timeout    HTTP connect + read timeout in milliseconds
  * @param retry      retry behaviour for transient Collector failures
+ * @param auth       authentication configuration for outbound Collector calls
  */
 @ConfigurationProperties(prefix = "cce.collector")
 public record CollectorProperties(
         String url,
         String eventsPath,
         int timeout,
-        RetryProperties retry
+        RetryProperties retry,
+        AuthProperties auth
 ) {
 
     /**
@@ -29,6 +31,18 @@ public record CollectorProperties(
     public record RetryProperties(
             int maxAttempts,
             long backoffMs
+    ) {}
+
+    /**
+     * Authentication configuration for outbound Collector / CCE Gateway calls.
+     *
+     * <p>The Emitter uses its own credentials to authenticate with the CCE Gateway,
+     * separate from the inbound OpenHIM channel authentication.
+     *
+     * @param token static Bearer token for authenticating with the CCE Gateway
+     */
+    public record AuthProperties(
+            String token
     ) {}
 
     /**

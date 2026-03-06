@@ -261,7 +261,7 @@ Content-Type: application/json
 }
 ```
 
-**Response:** `200 OK` with optional `config` object for dynamic configuration.
+**Response:** `200 OK`.
 
 ---
 

@@ -148,6 +148,16 @@ spring:
   profiles:
     active: dev
 
+# Mediator Identity & Endpoint
+mediator:
+  urn: "urn:mediator:cce-emitter-adaptor"
+  version: "1.0.0"
+  name: "CCE Emitter Adaptor"
+  endpoint:
+    host: localhost
+    path: /inbound
+    type: http
+
 # OpenHIM Core Configuration
 openhim:
   core:
@@ -155,10 +165,6 @@ openhim:
     api-port: 8080
     username: root@openhim.org
     password: openhim-password
-  mediator:
-    urn: "urn:mediator:cce-emitter-adaptor"
-    version: "1.0.0"
-    name: "CCE Emitter Adaptor"
   heartbeat:
     enabled: true
     interval-seconds: 10
@@ -209,6 +215,12 @@ logging:
 ### application-dev.yml
 
 ```yaml
+mediator:
+  endpoint:
+    host: localhost
+    path: /inbound
+    type: http
+
 openhim:
   core:
     host: localhost
@@ -234,6 +246,18 @@ logging:
 ### application-prod.yml
 
 ```yaml
+server:
+  port: ${SERVER_PORT:8082}
+
+mediator:
+  urn: ${MEDIATOR_URN:urn:mediator:cce-emitter-adaptor}
+  version: ${MEDIATOR_VERSION:1.0.0}
+  name: ${MEDIATOR_NAME:CCE Emitter Adaptor}
+  endpoint:
+    host: ${MEDIATOR_ENDPOINT_HOST:emitter-adaptor}
+    path: ${MEDIATOR_ENDPOINT_PATH:/inbound}
+    type: ${MEDIATOR_ENDPOINT_TYPE:http}
+
 openhim:
   core:
     host: ${OPENHIM_CORE_HOST}

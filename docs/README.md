@@ -65,7 +65,7 @@ eBUZIMA EMR → OpenHIM Core → Emitter Adaptor → CCE Collector → Kafka
 | `AbstractSourceAdaptor` | Base class — parses FHIR resources, builds CloudEvents |
 | `CollectorForwardingService` | `@Retryable` — POSTs CloudEvents to Collector via `RestClient` |
 | `MediatorRegistrar` | Registers with OpenHIM Core on startup |
-| `HeartbeatScheduler` | `@Scheduled` — periodic heartbeat + dynamic config sync |
+| `HeartbeatScheduler` | `@Scheduled` — periodic heartbeat for liveness |
 | `OpenHimResponseWrapper` | Wraps responses in `application/json+openhim` format |
 
 

@@ -94,13 +94,23 @@ Prefix: `openhim`
 | `openhim.core.api-port` | int | `8080` | OpenHIM Core API port (HTTPS) |
 | `openhim.core.username` | String | `root@openhim.org` | OpenHIM Core API username |
 | `openhim.core.password` | String | — | OpenHIM Core API password |
-| `openhim.mediator.urn` | String | `urn:mediator:cce-emitter-adaptor` | Unique mediator URN |
-| `openhim.mediator.version` | String | `1.0.0` | Mediator version string |
-| `openhim.mediator.name` | String | `CCE Emitter Adaptor` | Human-readable mediator name |
 | `openhim.heartbeat.enabled` | boolean | `true` | Enable/disable heartbeat scheduler |
 | `openhim.heartbeat.interval-seconds` | int | `10` | Heartbeat interval in seconds |
 
-### 3.2 Collector Properties
+### 3.2 Mediator Properties
+
+Prefix: `mediator`
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `mediator.urn` | String | `urn:mediator:cce-emitter-adaptor` | Unique mediator URN |
+| `mediator.version` | String | `1.0.0` | Mediator version string |
+| `mediator.name` | String | `CCE Emitter Adaptor` | Human-readable mediator name |
+| `mediator.endpoint.host` | String | `emitter-adaptor` | Hostname/container name registered with OpenHIM Core |
+| `mediator.endpoint.path` | String | `/inbound` | Request path registered with OpenHIM Core |
+| `mediator.endpoint.type` | String | `http` | Protocol type (`http` or `https`) |
+
+### 3.3 Collector Properties
 
 Prefix: `cce.collector`
 
@@ -112,7 +122,7 @@ Prefix: `cce.collector`
 | `cce.collector.retry.max-attempts` | int | `3` | Maximum retry attempts for 5xx/timeout |
 | `cce.collector.retry.backoff-ms` | int | `1000` | Initial backoff delay in ms (doubles per retry) |
 
-### 3.3 Emitter Source Properties
+### 3.4 Emitter Source Properties
 
 Prefix: `cce.emitter.sources`
 

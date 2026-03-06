@@ -1,4 +1,16 @@
 # Development profile — heartbeat disabled, DEBUG logging, local URLs
+server:
+  port: 8082
+
+mediator:
+  urn: "urn:mediator:cce-emitter-adaptor"
+  version: "1.0.0"
+  name: "CCE Emitter Adaptor"
+  endpoint:
+    host: localhost
+    path: /inbound
+    type: http
+
 openhim:
   core:
     host: localhost
@@ -11,11 +23,38 @@ openhim:
 cce:
   collector:
     url: http://localhost:5001
+    events-path: /v1/events
+    timeout: 5000
+    retry:
+      max-attempts: 3
+      backoff-ms: 1000
   emitter:
     sources:
       ebuzima:
         client-id: ebuzima-emr-client
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+  health:
+    livenessState:
+      enabled: true
+    readinessState:
+      enabled: true
+  metrics:
+    tags:
+      application: cce-emitter-adaptor
+
 logging:
   level:
     org.openphc.cce: DEBUG
+    org.springframework.web: DEBUG
+  pattern:
+    console: "%d{ISO8601} [%thread] %-5level %logger{36} - %msg%n"

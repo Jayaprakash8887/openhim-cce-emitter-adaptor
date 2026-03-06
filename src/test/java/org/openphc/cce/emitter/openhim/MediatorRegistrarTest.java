@@ -45,12 +45,10 @@ class MediatorRegistrarTest {
         var mediatorProps = new OpenHimProperties.MediatorProperties(
                 "urn:mediator:cce-emitter-adaptor", "1.0.0", "CCE Emitter Adaptor");
         var heartbeatProps = new OpenHimProperties.HeartbeatProperties(true, 10);
-        var endpointProps = new OpenHimProperties.EndpointProperties(
-                "emitter-adaptor", "/inbound", 8082, "http");
-        var openHimProperties = new OpenHimProperties(coreProps, mediatorProps,
-                heartbeatProps, endpointProps);
+        var openHimProperties = new OpenHimProperties(coreProps, mediatorProps, heartbeatProps);
 
-        registrar = new MediatorRegistrar(coreApiRestClient, openHimProperties, objectMapper);
+        registrar = new MediatorRegistrar(coreApiRestClient, openHimProperties,
+                objectMapper, 8082, "emitter-adaptor", "/inbound", "http");
     }
 
     @Test

@@ -1,6 +1,10 @@
 # Development profile — heartbeat disabled, DEBUG logging, local URLs
 server:
   port: 8082
+  endpoint:
+    host: localhost
+    path: /inbound
+    type: http
 
 openhim:
   core:
@@ -14,11 +18,6 @@ openhim:
     name: "CCE Emitter Adaptor"
   heartbeat:
     enabled: false
-  endpoint:
-    host: localhost
-    path: /inbound
-    port: 8082
-    type: http
 
 cce:
   collector:

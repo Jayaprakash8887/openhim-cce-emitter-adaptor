@@ -1,6 +1,10 @@
 # Production profile — env-var driven config, structured JSON logging, heartbeat enabled
 server:
   port: ${SERVER_PORT:8082}
+  endpoint:
+    host: ${CCE_EMITTER_ENDPOINT_HOST:emitter-adaptor}
+    path: ${CCE_EMITTER_ENDPOINT_PATH:/inbound}
+    type: ${CCE_EMITTER_ENDPOINT_TYPE:http}
 
 openhim:
   core:
@@ -15,11 +19,6 @@ openhim:
   heartbeat:
     enabled: true
     interval-seconds: ${OPENHIM_HEARTBEAT_INTERVAL:10}
-  endpoint:
-    host: ${OPENHIM_ENDPOINT_HOST:emitter-adaptor}
-    path: ${OPENHIM_ENDPOINT_PATH:/inbound}
-    port: ${OPENHIM_ENDPOINT_PORT:8082}
-    type: ${OPENHIM_ENDPOINT_TYPE:http}
 
 cce:
   collector:

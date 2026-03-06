@@ -1,6 +1,7 @@
 package org.openphc.cce.emitter.openhim;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.openphc.cce.emitter.config.OpenHimProperties;
@@ -40,12 +41,12 @@ public class OpenHimResponseWrapper {
     /**
      * Wraps the given response body and status into an OpenHIM-compatible envelope.
      *
-     * @param body            the response body object (will be serialized to JSON string)
+     * @param body            the response body as a Jackson {@link JsonNode} (will be serialized to JSON string)
      * @param status          the HTTP status code
      * @param orchestrations  orchestration entries documenting downstream calls
      * @return the fully populated {@link OpenHimResponse} envelope
      */
-    public OpenHimResponse wrap(Object body, HttpStatus status,
+    public OpenHimResponse wrap(JsonNode body, HttpStatus status,
                                  List<OpenHimResponse.Orchestration> orchestrations) {
         String bodyString = serializeBody(body);
         String timestamp = OffsetDateTime.now(ZoneOffset.UTC)
@@ -80,15 +81,14 @@ public class OpenHimResponseWrapper {
     }
 
     /**
-     * Serializes the response body to a JSON string.
-     * Returns the string as-is if the body is already a String.
+     * Serializes the {@link JsonNode} body to a JSON string.
+     *
+     * @param body the response body node, may be {@code null}
+     * @return the JSON string representation, or {@code null} if body is null
      */
-    private String serializeBody(Object body) {
-        if (body == null) {
+    private String serializeBody(JsonNode body) {
+        if (body == null || body.isNull()) {
             return null;
-        }
-        if (body instanceof String s) {
-            return s;
         }
         try {
             return objectMapper.writeValueAsString(body);

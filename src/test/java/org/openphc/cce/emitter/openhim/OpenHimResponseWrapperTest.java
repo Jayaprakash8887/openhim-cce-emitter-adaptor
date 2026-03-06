@@ -1,6 +1,8 @@
 package org.openphc.cce.emitter.openhim;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.NullNode;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -23,6 +25,20 @@ class OpenHimResponseWrapperTest {
     private OpenHimResponseWrapper wrapper;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    /** Helper to convert a Map to JsonNode for test convenience. */
+    private JsonNode toNode(Map<String, ?> map) {
+        return objectMapper.valueToTree(map);
+    }
+
+    /** Helper to convert a String to JsonNode. */
+    private JsonNode toNode(String json) {
+        try {
+            return objectMapper.readTree(json);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     @BeforeEach
     void setUp() {
         var coreProps = new OpenHimProperties.CoreProperties("localhost", 8080,
@@ -30,10 +46,7 @@ class OpenHimResponseWrapperTest {
         var mediatorProps = new OpenHimProperties.MediatorProperties(
                 "urn:mediator:cce-emitter-adaptor", "1.0.0", "CCE Emitter Adaptor");
         var heartbeatProps = new OpenHimProperties.HeartbeatProperties(true, 10);
-        var endpointProps = new OpenHimProperties.EndpointProperties(
-                "emitter-adaptor", "/inbound", 8082, "http");
-        var openHimProperties = new OpenHimProperties(coreProps, mediatorProps,
-                heartbeatProps, endpointProps);
+        var openHimProperties = new OpenHimProperties(coreProps, mediatorProps, heartbeatProps);
 
         wrapper = new OpenHimResponseWrapper(openHimProperties, objectMapper);
     }
@@ -46,7 +59,7 @@ class OpenHimResponseWrapperTest {
         @DisplayName("should wrap 202 response with 'Successful' status")
         void shouldWrap202AsSuccessful() {
             OpenHimResponse response = wrapper.wrap(
-                    Map.of("processed", 1),
+                    toNode(Map.of("processed", 1)),
                     HttpStatus.ACCEPTED,
                     List.of());
 
@@ -59,7 +72,7 @@ class OpenHimResponseWrapperTest {
         @DisplayName("should wrap 200 response with 'Successful' status")
         void shouldWrap200AsSuccessful() {
             OpenHimResponse response = wrapper.wrap(
-                    Map.of("status", "ignored"),
+                    toNode(Map.of("status", "ignored")),
                     HttpStatus.OK,
                     List.of());
 
@@ -71,7 +84,7 @@ class OpenHimResponseWrapperTest {
         @DisplayName("should serialize object body to JSON string")
         void shouldSerializeObjectBody() {
             OpenHimResponse response = wrapper.wrap(
-                    Map.of("eventId", "evt-001", "status", "accepted"),
+                    toNode(Map.of("eventId", "evt-001", "status", "accepted")),
                     HttpStatus.ACCEPTED,
                     List.of());
 
@@ -80,19 +93,21 @@ class OpenHimResponseWrapperTest {
         }
 
         @Test
-        @DisplayName("should pass through string body as-is")
+        @DisplayName("should serialize pre-built JsonNode body to JSON string")
         void shouldPassThroughStringBody() {
-            String body = "{\"already\":\"serialized\"}";
+            JsonNode body = toNode("{\"already\":\"serialized\"}");
 
             OpenHimResponse response = wrapper.wrap(body, HttpStatus.ACCEPTED, List.of());
 
-            assertThat(response.getResponse().getBody()).isEqualTo(body);
+            assertThat(response.getResponse().getBody()).contains("already");
+            assertThat(response.getResponse().getBody()).contains("serialized");
         }
 
         @Test
         @DisplayName("should include Content-Type header in response")
         void shouldIncludeContentTypeHeader() {
-            OpenHimResponse response = wrapper.wrap("body", HttpStatus.ACCEPTED, List.of());
+            OpenHimResponse response = wrapper.wrap(
+                    toNode(Map.of("ok", true)), HttpStatus.ACCEPTED, List.of());
 
             assertThat(response.getResponse().getHeaders())
                     .containsEntry("Content-Type", "application/json");
@@ -101,7 +116,8 @@ class OpenHimResponseWrapperTest {
         @Test
         @DisplayName("should include ISO-8601 timestamp")
         void shouldIncludeTimestamp() {
-            OpenHimResponse response = wrapper.wrap("body", HttpStatus.ACCEPTED, List.of());
+            OpenHimResponse response = wrapper.wrap(
+                    toNode(Map.of("ok", true)), HttpStatus.ACCEPTED, List.of());
 
             assertThat(response.getResponse().getTimestamp()).isNotNull();
             assertThat(response.getResponse().getTimestamp()).contains("T");
@@ -117,7 +133,7 @@ class OpenHimResponseWrapperTest {
         @DisplayName("should wrap 502 response with 'Failed' status")
         void shouldWrap502AsFailed() {
             OpenHimResponse response = wrapper.wrap(
-                    Map.of("error", "Collector unreachable"),
+                    toNode(Map.of("error", "Collector unreachable")),
                     HttpStatus.BAD_GATEWAY,
                     List.of());
 
@@ -129,7 +145,7 @@ class OpenHimResponseWrapperTest {
         @DisplayName("should wrap 400 response with 'Failed' status")
         void shouldWrap400AsFailed() {
             OpenHimResponse response = wrapper.wrap(
-                    Map.of("error", "Bad request"),
+                    toNode(Map.of("error", "Bad request")),
                     HttpStatus.BAD_REQUEST,
                     List.of());
 
@@ -141,7 +157,7 @@ class OpenHimResponseWrapperTest {
         @DisplayName("should wrap 422 response with 'Failed' status")
         void shouldWrap422AsFailed() {
             OpenHimResponse response = wrapper.wrap(
-                    Map.of("error", "FHIR mapping error"),
+                    toNode(Map.of("error", "FHIR mapping error")),
                     HttpStatus.UNPROCESSABLE_ENTITY,
                     List.of());
 
@@ -172,7 +188,8 @@ class OpenHimResponseWrapperTest {
                             .build())
                     .build();
 
-            OpenHimResponse response = wrapper.wrap("body", HttpStatus.ACCEPTED,
+            OpenHimResponse response = wrapper.wrap(
+                    toNode(Map.of("ok", true)), HttpStatus.ACCEPTED,
                     List.of(orchestration));
 
             assertThat(response.getOrchestrations()).hasSize(1);
@@ -187,7 +204,8 @@ class OpenHimResponseWrapperTest {
         @Test
         @DisplayName("should default to empty orchestrations when null is passed")
         void shouldDefaultToEmptyOrchestrations() {
-            OpenHimResponse response = wrapper.wrap("body", HttpStatus.ACCEPTED, null);
+            OpenHimResponse response = wrapper.wrap(
+                    toNode(Map.of("ok", true)), HttpStatus.ACCEPTED, null);
 
             assertThat(response.getOrchestrations()).isEmpty();
         }
@@ -200,7 +218,15 @@ class OpenHimResponseWrapperTest {
         @Test
         @DisplayName("should handle null body")
         void shouldHandleNullBody() {
-            OpenHimResponse response = wrapper.wrap(null, HttpStatus.ACCEPTED, List.of());
+            OpenHimResponse response = wrapper.wrap((JsonNode) null, HttpStatus.ACCEPTED, List.of());
+
+            assertThat(response.getResponse().getBody()).isNull();
+        }
+
+        @Test
+        @DisplayName("should handle NullNode body")
+        void shouldHandleNullNodeBody() {
+            OpenHimResponse response = wrapper.wrap(NullNode.getInstance(), HttpStatus.ACCEPTED, List.of());
 
             assertThat(response.getResponse().getBody()).isNull();
         }

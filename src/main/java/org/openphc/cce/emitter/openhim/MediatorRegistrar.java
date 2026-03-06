@@ -7,6 +7,7 @@ import org.openphc.cce.emitter.openhim.model.MediatorDescriptor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -35,14 +36,26 @@ public class MediatorRegistrar {
     private final RestClient coreApiRestClient;
     private final OpenHimProperties openHimProperties;
     private final ObjectMapper objectMapper;
+    private final int serverPort;
+    private final String endpointHost;
+    private final String endpointPath;
+    private final String endpointType;
 
     public MediatorRegistrar(
             @Qualifier("coreApiRestClient") RestClient coreApiRestClient,
             OpenHimProperties openHimProperties,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            @Value("${server.port}") int serverPort,
+            @Value("${server.endpoint.host}") String endpointHost,
+            @Value("${server.endpoint.path}") String endpointPath,
+            @Value("${server.endpoint.type}") String endpointType) {
         this.coreApiRestClient = coreApiRestClient;
         this.openHimProperties = openHimProperties;
         this.objectMapper = objectMapper;
+        this.serverPort = serverPort;
+        this.endpointHost = endpointHost;
+        this.endpointPath = endpointPath;
+        this.endpointType = endpointType;
     }
 
     /**
@@ -78,7 +91,6 @@ public class MediatorRegistrar {
      */
     MediatorDescriptor buildDescriptor() {
         var mediator = openHimProperties.mediator();
-        var ep = openHimProperties.endpoint();
 
         return MediatorDescriptor.builder()
                 .urn(mediator.urn())
@@ -89,11 +101,11 @@ public class MediatorRegistrar {
                 .endpoints(List.of(
                         MediatorDescriptor.Endpoint.builder()
                                 .name(mediator.name())
-                                .host(ep.host())
-                                .path(ep.path())
-                                .port(ep.port())
+                                .host(endpointHost)
+                                .path(endpointPath)
+                                .port(serverPort)
                                 .primary(true)
-                                .type(ep.type())
+                                .type(endpointType)
                                 .build()
                 ))
                 .build();

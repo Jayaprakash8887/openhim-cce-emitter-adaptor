@@ -268,7 +268,7 @@ Errors are handled by `GlobalExceptionHandler` (`@ControllerAdvice`):
 |---------|-----------|
 | **OpenHIM ↔ Mediator** | OpenHIM Core routes requests via existing eBUZIMA channel (secondary route); mediator trusts OpenHIM channel auth |
 | **Mediator → OpenHIM Core API** | Basic auth (`root@openhim.org` / password) for registration + heartbeat |
-| **Mediator → CCE Collector** | Authorization header passed through from inbound request. CCE Gateway validates the token (OAuth scope: `events:write`). |
+| **Mediator → CCE Collector** | Static Bearer token configured in `cce.collector.auth.token`. Emitter authenticates independently with the CCE Gateway (separate trust boundary from inbound OpenHIM auth). |
 | **TLS** | HTTPS connections configurable via Spring Boot `server.ssl.*` properties |
 
 ## 12. Deployment

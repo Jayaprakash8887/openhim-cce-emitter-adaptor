@@ -380,8 +380,7 @@ class AbstractSourceAdaptorTest {
                             "X-OpenHIM-ClientID", CLIENT_ID,
                             "X-Facility-Id", "0002",
                             "X-Source-Event-Id", "enc-visit-001",
-                            "X-Correlation-Id", "corr-abc-123",
-                            "Authorization", "Bearer token123"),
+                            "X-Correlation-Id", "corr-abc-123"),
                     "/inbound");
 
             SourceMetadata metadata = adaptor.buildSourceMetadata(request);
@@ -390,7 +389,6 @@ class AbstractSourceAdaptorTest {
             assertThat(metadata.facilityId()).isEqualTo("0002");
             assertThat(metadata.sourceEventId()).isEqualTo("enc-visit-001");
             assertThat(metadata.correlationId()).isEqualTo("corr-abc-123");
-            assertThat(metadata.authorizationHeader()).isEqualTo("Bearer token123");
             assertThat(metadata.sourcePath()).isEqualTo("/inbound");
             assertThat(metadata.eventTime()).isNotNull();
         }
@@ -421,7 +419,6 @@ class AbstractSourceAdaptorTest {
 
             assertThat(metadata.facilityId()).isNull();
             assertThat(metadata.sourceEventId()).isNull();
-            assertThat(metadata.authorizationHeader()).isNull();
         }
     }
 

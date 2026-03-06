@@ -116,7 +116,7 @@ class InboundRequestTest {
     @Test
     void metadataShouldBeSettable() {
         InboundRequest request = InboundRequest.from("body", Map.of(), "/inbound");
-        SourceMetadata metadata = new SourceMetadata("ebuzima", "FAC-001", null, "corr-1", null, "/inbound", null);
+        SourceMetadata metadata = new SourceMetadata("ebuzima", "FAC-001", null, "corr-1", null, "/inbound");
 
         request.setMetadata(metadata);
 

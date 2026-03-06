@@ -13,7 +13,7 @@ mediator:
   version: "1.0.0"
   name: "CCE Emitter Adaptor"
   endpoint:
-    host: emitter-adaptor
+    host: localhost
     path: /inbound
     type: http
 

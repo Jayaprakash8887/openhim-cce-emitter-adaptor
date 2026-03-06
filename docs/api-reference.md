@@ -15,7 +15,7 @@ The adaptor exposes a single inbound endpoint. Source system adaptor is selected
 
 ### 2.1 POST /inbound
 
-Generic inbound endpoint. Routes to the matching `SourceAdaptor` based on `X-OpenHIM-ClientID` header (matched against configured client IDs).
+Generic inbound endpoint. Routes to the matching source based on `X-OpenHIM-ClientID` header (matched against configured client IDs in `cce.emitter.sources`).
 
 ```
 POST /inbound

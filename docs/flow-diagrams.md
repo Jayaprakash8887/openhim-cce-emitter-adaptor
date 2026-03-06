@@ -16,7 +16,7 @@ flowchart LR
 
     subgraph "CCE Emitter Adaptor (Spring Boot)"
         CTRL[InboundEvent<br/>Controller]
-        SA[SourceAdaptor<br/>Registry]
+        SA[SourceAdaptor<br/>Service]
         PARSE[FHIR Resource<br/>Parser]
         NORM[CloudEvent<br/>Builder]
         FWD["Collector<br/>Forwarding<br/>@Retryable"]
@@ -48,8 +48,7 @@ flowchart LR
 sequenceDiagram
     participant OHC as OpenHIM Core
     participant Ctrl as InboundEventController
-    participant Reg as SourceAdaptorRegistry
-    participant SA as SourceAdaptor
+    participant Svc as SourceAdaptorService
     participant CE as CloudEventEnvelopeBuilder
     participant Fwd as CollectorForwardingService
     participant Col as CCE Collector
@@ -60,18 +59,14 @@ sequenceDiagram
 
     Ctrl->>Ctrl: InboundRequest.from(body, headers, path)
 
-    Ctrl->>Reg: findAdaptor(inboundRequest)
-    Reg->>Reg: Iterate @Order-sorted adaptors
-    Reg->>SA: canHandle(request) → true
-    Reg-->>Ctrl: Matching SourceAdaptor
-
-    Ctrl->>SA: adapt(inboundRequest)
-    activate SA
-    SA->>SA: Parse FHIR resource (ignore if Bundle)
-    SA->>CE: build(fhirResource, patientUpid, type, metadata)
-    CE-->>SA: CloudEventDto
-    SA-->>Ctrl: List<CloudEventDto>
-    deactivate SA
+    Ctrl->>Svc: adapt(inboundRequest)
+    activate Svc
+    Svc->>Svc: resolveSource(request) → sourceKey
+    Svc->>Svc: Parse FHIR resource (ignore if Bundle)
+    Svc->>CE: build(fhirResource, patientUpid, type, metadata)
+    CE-->>Svc: CloudEventDto
+    Svc-->>Ctrl: List<CloudEventDto>
+    deactivate Svc
 
     loop Each CloudEvent
         Ctrl->>Fwd: forward(cloudEvent)
@@ -96,7 +91,7 @@ sequenceDiagram
 flowchart TD
     A[POST /inbound] --> B{X-OpenHIM-ClientID<br/>matches configured<br/>source?}
 
-    B -->|Yes| C[Matching SourceAdaptor]
+    B -->|Yes| C[Resolved source key]
     B -->|No / not set| G{X-Source-System<br/>header?}
 
     G -->|Matches known source| C
@@ -234,11 +229,11 @@ flowchart TD
 flowchart TD
     CTRL[InboundEventController]
     NORM[EventProcessingService]
-    REG[SourceAdaptorRegistry]
+    REG[SourceAdaptorService]
     FWD[CollectorForwardingService]
     WRAP[OpenHimResponseWrapper]
 
-    SA_ABS[AbstractSourceAdaptor]
+    SA_ABS["(internal FHIR→CloudEvent logic)"]
 
     CE[CloudEventEnvelopeBuilder]
     PIE[PatientIdExtractor]

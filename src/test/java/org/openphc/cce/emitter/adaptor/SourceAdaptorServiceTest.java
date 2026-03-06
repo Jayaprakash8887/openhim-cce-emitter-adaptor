@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.openphc.cce.emitter.cloudevents.CloudEventEnvelopeBuilder;
 import org.openphc.cce.emitter.cloudevents.EventIdGenerator;
+import org.openphc.cce.emitter.config.EmitterProperties;
+import org.openphc.cce.emitter.config.EmitterProperties.SourceProperties;
 import org.openphc.cce.emitter.exception.FhirMappingException;
 import org.openphc.cce.emitter.exception.PatientIdNotFoundException;
 import org.openphc.cce.emitter.fhir.FhirResourceParser;
@@ -21,24 +23,24 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
 
 /**
- * Unit tests for {@link AbstractSourceAdaptor} via the concrete
- * {@link ConfiguredSourceAdaptor} class.
+ * Unit tests for {@link SourceAdaptorService}.
  *
  * <p>Uses real {@link FhirResourceParser}, {@link PatientIdExtractor}, and
  * {@link CloudEventEnvelopeBuilder} instances (not mocks) to verify the
  * full FHIR-to-CloudEvent transformation pipeline.
  */
-class AbstractSourceAdaptorTest {
+class SourceAdaptorServiceTest {
 
     private static final String SOURCE_KEY = "ebuzima";
     private static final String CLIENT_ID = "ebuzima-emr-client";
     private static final String PATIENT_UPID = "260225-0002-5501";
 
-    private ConfiguredSourceAdaptor adaptor;
+    private SourceAdaptorService service;
 
     private String encounterJson;
     private String observationJson;
@@ -53,8 +55,11 @@ class AbstractSourceAdaptorTest {
         EventIdGenerator idGenerator = new EventIdGenerator();
         CloudEventEnvelopeBuilder envelopeBuilder = new CloudEventEnvelopeBuilder(idGenerator, objectMapper);
 
-        adaptor = new ConfiguredSourceAdaptor(
-                SOURCE_KEY, CLIENT_ID,
+        EmitterProperties emitterProperties = new EmitterProperties(
+                Map.of(SOURCE_KEY, new SourceProperties(CLIENT_ID)));
+
+        service = new SourceAdaptorService(
+                emitterProperties,
                 fhirResourceParser, patientIdExtractor, envelopeBuilder);
 
         encounterJson = loadFixture("ebuzima/fhir-encounter.json");
@@ -62,10 +67,10 @@ class AbstractSourceAdaptorTest {
         bundleJson = loadFixture("ebuzima/fhir-bundle.json");
     }
 
-    // ==================== canHandle() ====================
+    // ==================== resolveSource() ====================
 
     @Nested
-    class CanHandle {
+    class ResolveSource {
 
         @Test
         void matchesByOpenHimClientIdHeader() {
@@ -74,7 +79,7 @@ class AbstractSourceAdaptorTest {
                     Map.of("X-OpenHIM-ClientID", CLIENT_ID),
                     "/inbound");
 
-            assertThat(adaptor.canHandle(request)).isTrue();
+            assertThat(service.resolveSource(request)).contains(SOURCE_KEY);
         }
 
         @Test
@@ -84,7 +89,7 @@ class AbstractSourceAdaptorTest {
                     Map.of("X-Source-System", SOURCE_KEY),
                     "/inbound");
 
-            assertThat(adaptor.canHandle(request)).isTrue();
+            assertThat(service.resolveSource(request)).contains(SOURCE_KEY);
         }
 
         @Test
@@ -94,12 +99,11 @@ class AbstractSourceAdaptorTest {
                     Map.of("X-Source-System", "EBUZIMA"),
                     "/inbound");
 
-            assertThat(adaptor.canHandle(request)).isTrue();
+            assertThat(service.resolveSource(request)).contains(SOURCE_KEY);
         }
 
         @Test
         void clientIdHeaderTakesPriorityOverSourceSystem() {
-            // Both headers present — ClientID should be checked first
             InboundRequest request = InboundRequest.from(
                     encounterJson,
                     Map.of(
@@ -107,27 +111,27 @@ class AbstractSourceAdaptorTest {
                             "X-Source-System", "wrong-source"),
                     "/inbound");
 
-            assertThat(adaptor.canHandle(request)).isTrue();
+            assertThat(service.resolveSource(request)).contains(SOURCE_KEY);
         }
 
         @Test
-        void noMatchingHeaders_returnsFalse() {
+        void noMatchingHeaders_returnsEmpty() {
             InboundRequest request = InboundRequest.from(
                     encounterJson,
                     Map.of("X-OpenHIM-ClientID", "other-client"),
                     "/inbound");
 
-            assertThat(adaptor.canHandle(request)).isFalse();
+            assertThat(service.resolveSource(request)).isEmpty();
         }
 
         @Test
-        void noHeaders_returnsFalse() {
+        void noHeaders_returnsEmpty() {
             InboundRequest request = InboundRequest.from(
                     encounterJson,
                     Map.of(),
                     "/inbound");
 
-            assertThat(adaptor.canHandle(request)).isFalse();
+            assertThat(service.resolveSource(request)).isEmpty();
         }
 
         @Test
@@ -139,7 +143,83 @@ class AbstractSourceAdaptorTest {
                             "X-Source-System", SOURCE_KEY),
                     "/inbound");
 
-            assertThat(adaptor.canHandle(request)).isTrue();
+            assertThat(service.resolveSource(request)).contains(SOURCE_KEY);
+        }
+    }
+
+    // ==================== resolveSource() — Multiple sources ====================
+
+    @Nested
+    class ResolveSourceMultipleSources {
+
+        private SourceAdaptorService multiService;
+
+        @BeforeEach
+        void setUp() {
+            FhirContext fhirContext = FhirContext.forR4();
+            FhirResourceParser fhirResourceParser = new FhirResourceParser(fhirContext);
+            PatientIdExtractor patientIdExtractor = new PatientIdExtractor();
+            ObjectMapper objectMapper = new ObjectMapper();
+            EventIdGenerator idGenerator = new EventIdGenerator();
+            CloudEventEnvelopeBuilder envelopeBuilder = new CloudEventEnvelopeBuilder(idGenerator, objectMapper);
+
+            EmitterProperties emitterProperties = new EmitterProperties(Map.of(
+                    "ebuzima", new SourceProperties("ebuzima-emr-client"),
+                    "dhis2", new SourceProperties("dhis2-client")));
+
+            multiService = new SourceAdaptorService(
+                    emitterProperties,
+                    fhirResourceParser, patientIdExtractor, envelopeBuilder);
+        }
+
+        @Test
+        void matchesCorrectSourceByClientId() {
+            InboundRequest request = InboundRequest.from(
+                    "{}", Map.of("X-OpenHIM-ClientID", "dhis2-client"), "/inbound");
+
+            assertThat(multiService.resolveSource(request)).contains("dhis2");
+        }
+
+        @Test
+        void matchesCorrectSourceBySourceSystem() {
+            InboundRequest request = InboundRequest.from(
+                    "{}", Map.of("X-Source-System", "dhis2"), "/inbound");
+
+            assertThat(multiService.resolveSource(request)).contains("dhis2");
+        }
+
+        @Test
+        void noMatchAcrossAllSources_returnsEmpty() {
+            InboundRequest request = InboundRequest.from(
+                    "{}", Map.of("X-OpenHIM-ClientID", "unknown-client"), "/inbound");
+
+            assertThat(multiService.resolveSource(request)).isEmpty();
+        }
+    }
+
+    // ==================== resolveSource() — No sources configured ====================
+
+    @Nested
+    class ResolveSourceNoSources {
+
+        @Test
+        void emptySourcesConfig_returnsEmpty() {
+            FhirContext fhirContext = FhirContext.forR4();
+            FhirResourceParser fhirResourceParser = new FhirResourceParser(fhirContext);
+            PatientIdExtractor patientIdExtractor = new PatientIdExtractor();
+            ObjectMapper objectMapper = new ObjectMapper();
+            EventIdGenerator idGenerator = new EventIdGenerator();
+            CloudEventEnvelopeBuilder envelopeBuilder = new CloudEventEnvelopeBuilder(idGenerator, objectMapper);
+
+            EmitterProperties emitterProperties = new EmitterProperties(Map.of());
+            SourceAdaptorService emptyService = new SourceAdaptorService(
+                    emitterProperties,
+                    fhirResourceParser, patientIdExtractor, envelopeBuilder);
+
+            InboundRequest request = InboundRequest.from(
+                    "{}", Map.of("X-OpenHIM-ClientID", CLIENT_ID), "/inbound");
+
+            assertThat(emptyService.resolveSource(request)).isEmpty();
         }
     }
 
@@ -152,7 +232,7 @@ class AbstractSourceAdaptorTest {
         void encounter_producesSingleCloudEvent() {
             InboundRequest request = buildRequest(encounterJson);
 
-            List<CloudEventDto> events = adaptor.adapt(request);
+            List<CloudEventDto> events = service.adapt(request);
 
             assertThat(events).hasSize(1);
         }
@@ -161,7 +241,7 @@ class AbstractSourceAdaptorTest {
         void encounter_hasCorrectType() {
             InboundRequest request = buildRequest(encounterJson);
 
-            CloudEventDto event = adaptor.adapt(request).get(0);
+            CloudEventDto event = service.adapt(request).get(0);
 
             assertThat(event.getType()).isEqualTo("Encounter");
         }
@@ -170,7 +250,7 @@ class AbstractSourceAdaptorTest {
         void encounter_hasCorrectSubject() {
             InboundRequest request = buildRequest(encounterJson);
 
-            CloudEventDto event = adaptor.adapt(request).get(0);
+            CloudEventDto event = service.adapt(request).get(0);
 
             assertThat(event.getSubject()).isEqualTo(PATIENT_UPID);
         }
@@ -179,7 +259,7 @@ class AbstractSourceAdaptorTest {
         void encounter_hasCorrectSource() {
             InboundRequest request = buildRequest(encounterJson);
 
-            CloudEventDto event = adaptor.adapt(request).get(0);
+            CloudEventDto event = service.adapt(request).get(0);
 
             assertThat(event.getSource()).isEqualTo(SOURCE_KEY);
         }
@@ -188,7 +268,7 @@ class AbstractSourceAdaptorTest {
         void encounter_hasSpecVersion() {
             InboundRequest request = buildRequest(encounterJson);
 
-            CloudEventDto event = adaptor.adapt(request).get(0);
+            CloudEventDto event = service.adapt(request).get(0);
 
             assertThat(event.getSpecversion()).isEqualTo("1.0");
         }
@@ -197,7 +277,7 @@ class AbstractSourceAdaptorTest {
         void encounter_hasDataContentType() {
             InboundRequest request = buildRequest(encounterJson);
 
-            CloudEventDto event = adaptor.adapt(request).get(0);
+            CloudEventDto event = service.adapt(request).get(0);
 
             assertThat(event.getDatacontenttype()).isEqualTo("application/fhir+json");
         }
@@ -206,7 +286,7 @@ class AbstractSourceAdaptorTest {
         void encounter_hasEventId() {
             InboundRequest request = buildRequest(encounterJson);
 
-            CloudEventDto event = adaptor.adapt(request).get(0);
+            CloudEventDto event = service.adapt(request).get(0);
 
             assertThat(event.getId()).isNotNull().isNotBlank();
         }
@@ -215,7 +295,7 @@ class AbstractSourceAdaptorTest {
         void encounter_hasTimestamp() {
             InboundRequest request = buildRequest(encounterJson);
 
-            CloudEventDto event = adaptor.adapt(request).get(0);
+            CloudEventDto event = service.adapt(request).get(0);
 
             assertThat(event.getTime()).isNotNull().isNotBlank();
         }
@@ -224,7 +304,7 @@ class AbstractSourceAdaptorTest {
         void encounter_hasDataPayload() {
             InboundRequest request = buildRequest(encounterJson);
 
-            CloudEventDto event = adaptor.adapt(request).get(0);
+            CloudEventDto event = service.adapt(request).get(0);
 
             assertThat(event.getData()).isNotNull();
             assertThat(event.getData().get("resourceType").asText()).isEqualTo("Encounter");
@@ -240,7 +320,7 @@ class AbstractSourceAdaptorTest {
         void observation_producesSingleCloudEvent() {
             InboundRequest request = buildRequest(observationJson);
 
-            List<CloudEventDto> events = adaptor.adapt(request);
+            List<CloudEventDto> events = service.adapt(request);
 
             assertThat(events).hasSize(1);
         }
@@ -249,7 +329,7 @@ class AbstractSourceAdaptorTest {
         void observation_hasCorrectType() {
             InboundRequest request = buildRequest(observationJson);
 
-            CloudEventDto event = adaptor.adapt(request).get(0);
+            CloudEventDto event = service.adapt(request).get(0);
 
             assertThat(event.getType()).isEqualTo("Observation");
         }
@@ -258,7 +338,7 @@ class AbstractSourceAdaptorTest {
         void observation_hasCorrectSubject() {
             InboundRequest request = buildRequest(observationJson);
 
-            CloudEventDto event = adaptor.adapt(request).get(0);
+            CloudEventDto event = service.adapt(request).get(0);
 
             assertThat(event.getSubject()).isEqualTo(PATIENT_UPID);
         }
@@ -267,7 +347,7 @@ class AbstractSourceAdaptorTest {
         void observation_dataContainsObservationResource() {
             InboundRequest request = buildRequest(observationJson);
 
-            CloudEventDto event = adaptor.adapt(request).get(0);
+            CloudEventDto event = service.adapt(request).get(0);
 
             assertThat(event.getData().get("resourceType").asText()).isEqualTo("Observation");
             assertThat(event.getData().get("id").asText()).isEqualTo("obs-lab-hb-001");
@@ -283,7 +363,7 @@ class AbstractSourceAdaptorTest {
         void bundle_returnsEmptyList() {
             InboundRequest request = buildRequest(bundleJson);
 
-            List<CloudEventDto> events = adaptor.adapt(request);
+            List<CloudEventDto> events = service.adapt(request);
 
             assertThat(events).isEmpty();
         }
@@ -301,7 +381,7 @@ class AbstractSourceAdaptorTest {
                     Map.of("X-OpenHIM-ClientID", CLIENT_ID),
                     "/inbound");
 
-            List<CloudEventDto> events = adaptor.adapt(request);
+            List<CloudEventDto> events = service.adapt(request);
 
             assertThat(events).isEmpty();
         }
@@ -313,7 +393,25 @@ class AbstractSourceAdaptorTest {
                     Map.of("X-OpenHIM-ClientID", CLIENT_ID),
                     "/inbound");
 
-            List<CloudEventDto> events = adaptor.adapt(request);
+            List<CloudEventDto> events = service.adapt(request);
+
+            assertThat(events).isEmpty();
+        }
+    }
+
+    // ==================== adapt() — No source match ====================
+
+    @Nested
+    class AdaptNoSourceMatch {
+
+        @Test
+        void noSourceMatch_returnsEmptyList() {
+            InboundRequest request = InboundRequest.from(
+                    encounterJson,
+                    Map.of("X-OpenHIM-ClientID", "unknown-client"),
+                    "/inbound");
+
+            List<CloudEventDto> events = service.adapt(request);
 
             assertThat(events).isEmpty();
         }
@@ -326,15 +424,13 @@ class AbstractSourceAdaptorTest {
 
         @Test
         void malformedFhirJson_throwsFhirMappingException() {
-            // Contains "resourceType" so passes containsFhirResource() check,
-            // but is not valid FHIR JSON
             String malformed = "{\"resourceType\": \"Encounter\", \"invalidField\": [}";
             InboundRequest request = InboundRequest.from(
                     malformed,
                     Map.of("X-OpenHIM-ClientID", CLIENT_ID),
                     "/inbound");
 
-            assertThatThrownBy(() -> adaptor.adapt(request))
+            assertThatThrownBy(() -> service.adapt(request))
                     .isInstanceOf(FhirMappingException.class);
         }
     }
@@ -362,7 +458,7 @@ class AbstractSourceAdaptorTest {
                     Map.of("X-OpenHIM-ClientID", CLIENT_ID),
                     "/inbound");
 
-            assertThatThrownBy(() -> adaptor.adapt(request))
+            assertThatThrownBy(() -> service.adapt(request))
                     .isInstanceOf(PatientIdNotFoundException.class);
         }
     }
@@ -370,7 +466,7 @@ class AbstractSourceAdaptorTest {
     // ==================== buildSourceMetadata() ====================
 
     @Nested
-    class BuildSourceMetadata {
+    class BuildSourceMetadataTests {
 
         @Test
         void extractsAllHeadersIntoMetadata() {
@@ -383,7 +479,7 @@ class AbstractSourceAdaptorTest {
                             "X-Correlation-Id", "corr-abc-123"),
                     "/inbound");
 
-            SourceMetadata metadata = adaptor.buildSourceMetadata(request);
+            SourceMetadata metadata = service.buildSourceMetadata(request, SOURCE_KEY);
 
             assertThat(metadata.sourceIdentifier()).isEqualTo(SOURCE_KEY);
             assertThat(metadata.facilityId()).isEqualTo("0002");
@@ -400,10 +496,9 @@ class AbstractSourceAdaptorTest {
                     Map.of("X-OpenHIM-ClientID", CLIENT_ID),
                     "/inbound");
 
-            SourceMetadata metadata = adaptor.buildSourceMetadata(request);
+            SourceMetadata metadata = service.buildSourceMetadata(request, SOURCE_KEY);
 
             assertThat(metadata.correlationId()).isNotNull().isNotBlank();
-            // Should be a valid UUID format
             assertThat(metadata.correlationId())
                     .matches("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$");
         }
@@ -415,7 +510,7 @@ class AbstractSourceAdaptorTest {
                     Map.of(),
                     "/inbound");
 
-            SourceMetadata metadata = adaptor.buildSourceMetadata(request);
+            SourceMetadata metadata = service.buildSourceMetadata(request, SOURCE_KEY);
 
             assertThat(metadata.facilityId()).isNull();
             assertThat(metadata.sourceEventId()).isNull();
@@ -436,7 +531,7 @@ class AbstractSourceAdaptorTest {
                             "X-Facility-Id", "0002"),
                     "/inbound");
 
-            CloudEventDto event = adaptor.adapt(request).get(0);
+            CloudEventDto event = service.adapt(request).get(0);
 
             assertThat(event.getFacilityid()).isEqualTo("0002");
         }
@@ -450,7 +545,7 @@ class AbstractSourceAdaptorTest {
                             "X-Source-Event-Id", "enc-visit-001"),
                     "/inbound");
 
-            CloudEventDto event = adaptor.adapt(request).get(0);
+            CloudEventDto event = service.adapt(request).get(0);
 
             assertThat(event.getSourceeventid()).isEqualTo("enc-visit-001");
         }
@@ -464,7 +559,7 @@ class AbstractSourceAdaptorTest {
                             "X-Correlation-Id", "corr-trace-001"),
                     "/inbound");
 
-            CloudEventDto event = adaptor.adapt(request).get(0);
+            CloudEventDto event = service.adapt(request).get(0);
 
             assertThat(event.getCorrelationid()).isEqualTo("corr-trace-001");
         }
@@ -485,18 +580,11 @@ class AbstractSourceAdaptorTest {
                             "X-Source-Event-Id", "enc-visit-001"),
                     "/inbound");
 
-            CloudEventDto event1 = adaptor.adapt(request1).get(0);
-            CloudEventDto event2 = adaptor.adapt(request2).get(0);
+            CloudEventDto event1 = service.adapt(request1).get(0);
+            CloudEventDto event2 = service.adapt(request2).get(0);
 
             assertThat(event1.getId()).isEqualTo(event2.getId());
         }
-    }
-
-    // ==================== getSourceIdentifier() ====================
-
-    @Test
-    void getSourceIdentifier_returnsSourceKey() {
-        assertThat(adaptor.getSourceIdentifier()).isEqualTo(SOURCE_KEY);
     }
 
     // ==================== Helpers ====================

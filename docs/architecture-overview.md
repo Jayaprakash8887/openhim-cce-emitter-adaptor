@@ -326,6 +326,8 @@ WireMock mappings in `wiremock/mappings/`. Dockerfile is sufficient for producti
 
 ## 13. Observability
 
+> **See also:** [Data Dictionary — §7 Metrics Reference](data-dictionary.md#7-metrics-reference) and [§8 MDC Context Fields](data-dictionary.md#8-mdc-context-fields) for authoritative field-level definitions. [Monitoring & Alerting Guide](monitoring-alerting.md) for Prometheus alert rules, Grafana dashboards, and log-based monitoring.
+
 ### Custom Metrics (Micrometer)
 
 Registered in `InboundEventService` and `CollectorForwardingService` via constructor-injected `MeterRegistry`.

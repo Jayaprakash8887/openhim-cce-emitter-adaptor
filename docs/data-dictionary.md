@@ -131,7 +131,7 @@ Prefix: `cce.emitter.sources`
 |----------|------|---------|-------------|
 | `cce.emitter.sources.ebuzima.client-id` | String | `ebuzima-emr-client` | OpenHIM client ID for eBUZIMA EMR. Matched against `X-OpenHIM-ClientID` or `X-Source-System` header for adaptor routing. |
 
-### 3.4 Server Properties
+### 3.5 Server Properties
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|

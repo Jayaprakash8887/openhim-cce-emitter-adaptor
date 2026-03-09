@@ -165,8 +165,8 @@ org.openphc.cce.emitter/
 │   └── PatientIdExtractor.java                    #   Extract patient UPID from FHIR resources
 │
 ├── service/                                       # Business logic
-│   ├── InboundEventService.java                   #   Orchestrates pipeline: adapt → forward → wrap
-│   └── CollectorForwardingService.java            #   @Retryable: POST to Collector via RestClient
+│   ├── InboundEventService.java                   #   Orchestrates pipeline: adapt → forward → wrap (+ metrics + MDC)
+│   └── CollectorForwardingService.java            #   @Retryable: POST to Collector via RestClient (+ latency timer)
 │
 ├── model/                                         # DTOs
 │   ├── CloudEventDto.java                         #   CloudEvents v1.0 output DTO
@@ -185,6 +185,37 @@ org.openphc.cce.emitter/
 ```
 
 **~31 source files** across 8 packages.
+
+### Resources
+
+```
+src/main/resources/
+├── application.yml                                # Base config (all profiles inherit)
+├── application-dev.yml                            # Dev profile (heartbeat disabled)
+├── application-prod.yml                           # Prod profile (env-var driven)
+└── logback-spring.xml                             # Structured logging: dev (human-readable + MDC) / prod (JSON)
+```
+
+### Test Resources
+
+```
+src/test/
+├── java/org/openphc/cce/emitter/
+│   ├── integration/                               # Integration tests (@ActiveProfiles("integration"))
+│   │   ├── FullPipelineIntegrationTest.java       #   End-to-end FHIR → CloudEvent → Collector WireMock
+│   │   ├── RetryIntegrationTest.java              #   Retry behavior (503, 422, 400, eventual success)
+│   │   └── ActuatorMetricsIntegrationTest.java    #   Health probes, Prometheus, custom metrics
+│   └── ...                                        # Unit test packages mirror main structure
+└── resources/
+    ├── application-integration.yml                # Integration test profile (random port, WireMock, fast retry)
+    ├── fhir/                                      # FHIR test fixtures
+    │   ├── encounter-visit.json
+    │   └── observation-lab.json
+    └── ebuzima/                                   # eBUZIMA-specific test fixtures
+        ├── fhir-bundle.json
+        ├── fhir-encounter.json
+        └── fhir-observation.json
+```
 
 ## 7. Request Processing Pipeline
 
@@ -266,29 +297,84 @@ Errors are handled by `GlobalExceptionHandler` (`@ControllerAdvice`):
 
 | Aspect | Value |
 |--------|-------|
-| **Artifact** | `cce-emitter-adaptor.jar` (Spring Boot fat JAR) |
+| **Artifact** | `cce-emitter-adaptor-1.0.0-SNAPSHOT.jar` (Spring Boot fat JAR) |
 | **Port** | 8082 |
 | **Liveness** | `/actuator/health/liveness` |
 | **Readiness** | `/actuator/health/readiness` |
 | **Metrics** | `/actuator/prometheus` |
-| **Key env vars** | `OPENHIM_CORE_HOST`, `CCE_COLLECTOR_URL`, `SPRING_PROFILES_ACTIVE` |
+| **Key env vars** | `OPENHIM_CORE_HOST`, `CCE_COLLECTOR_URL`, `CCE_COLLECTOR_AUTH_TOKEN`, `SPRING_PROFILES_ACTIVE` |
+
+### Docker
+
+| Stage | Base Image | Purpose |
+|-------|-----------|--------|
+| `build` | `eclipse-temurin:21-jdk-jammy` | Compile + `bootJar` (tests skipped) |
+| `runtime` | `eclipse-temurin:21-jre-jammy` | Run the fat JAR |
+
+Security: runs as non-root `appuser`. Includes `HEALTHCHECK` via `/actuator/health/liveness`.
+
+### Docker Compose (Local Development)
+
+| Service | Image | Port(s) | Purpose |
+|---------|-------|---------|--------|
+| `mongo` | `mongo:7.0` | 27017 | OpenHIM backend datastore |
+| `openhim-core` | `jembi/openhim-core:v8.4.3` | 5000, 5001, 8080 | OpenHIM Core (HTTP, HTTPS, API) |
+| `openhim-console` | `jembi/openhim-console:v1.18.4` | 9000 | OpenHIM web admin UI |
+| `collector-stub` | `wiremock/wiremock:3.9.0` | 5055 | WireMock stub for CCE Collector |
+
+WireMock mappings in `wiremock/mappings/`. Dockerfile is sufficient for production — `docker-compose.yml` is a local development convenience.
 
 ## 13. Observability
 
 ### Custom Metrics (Micrometer)
 
-| Metric | Type | Description |
-|--------|------|-------------|
-| `cce.emitter.events.received` | Counter | Total events received by source |
-| `cce.emitter.events.forwarded` | Counter | Events successfully forwarded to Collector |
-| `cce.emitter.events.rejected` | Counter | Events rejected (mapping/validation failure) |
-| `cce.emitter.events.duplicate` | Counter | Duplicate events (Collector returned 200) |
-| `cce.emitter.collector.latency` | Timer | Collector forwarding latency |
-| `cce.emitter.collector.retries` | Counter | Retry attempts to Collector |
+Registered in `InboundEventService` and `CollectorForwardingService` via constructor-injected `MeterRegistry`.
 
-### Structured Logging
+| Metric | Type | Tags | Registered In | Description |
+|--------|------|------|---------------|-------------|
+| `cce.emitter.events.received` | Counter | `source`, `path` | `InboundEventService` | Total inbound events received |
+| `cce.emitter.events.forwarded` | Counter | `source` | `InboundEventService` | Events successfully forwarded to Collector |
+| `cce.emitter.events.duplicate` | Counter | — | `InboundEventService` | Duplicate events (Collector returned 200) |
+| `cce.emitter.events.rejected` | Counter | — | `CollectorForwardingService` | Events rejected by Collector (4xx) |
+| `cce.emitter.collector.latency` | Timer | — | `CollectorForwardingService` | Collector forwarding round-trip latency |
+| `cce.emitter.collector.retries` | Counter | — | `CollectorForwardingService` | Retry attempts exhausted |
 
-SLF4J + Logback with structured JSON output. Key MDC fields: `correlationId`, `source`, `eventType`, `subject`.
+### Structured Logging (MDC)
+
+`InboundEventService` populates SLF4J MDC per-event with `try/finally` to ensure cleanup:
+
+| MDC Key | Source | Description |
+|---------|--------|-------------|
+| `correlationId` | `X-Correlation-Id` header or generated | Trace correlation ID |
+| `source` | Resolved source key | Source system identifier (e.g., `"ebuzima"`) |
+| `eventType` | FHIR `resourceType` | CloudEvents `type` field |
+| `subject` | Patient UPID | Patient identifier for the event |
+
+### Logback Configuration (`logback-spring.xml`)
+
+| Profile | Format | Description |
+|---------|--------|-------------|
+| `!prod` (default/dev) | Human-readable with MDC | `%d [%thread] %-5level %logger [correlationId] [source] [eventType] [subject] - %msg` |
+| `prod` | Pattern-based JSON | `{"timestamp":...,"level":...,"logger":...,"correlationId":...,"source":...,"eventType":...,"subject":...,"message":...}` |
+
+> Production JSON logging uses pattern-based layout — no extra dependencies (e.g., logback-contrib) required.
+
+### Prometheus
+
+Spring Boot 3.4.x requires explicit Prometheus enablement in `application.yml`:
+
+```yaml
+management:
+  endpoint:
+    prometheus:
+      enabled: true
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+```
+
+These settings are in the base `application.yml` and carry through to all profiles via Spring Boot's additive YAML merging.
 
 ## 14. Non-Functional Requirements
 

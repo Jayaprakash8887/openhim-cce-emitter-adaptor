@@ -38,8 +38,14 @@ emitter-adaptor/
 ├── settings.gradle.kts           # Project settings
 ├── gradlew                       # Gradle wrapper (Unix)
 ├── gradlew.bat                   # Gradle wrapper (Windows)
+├── Dockerfile                    # Multi-stage build (JDK build → JRE runtime)
+├── .dockerignore                 # Docker build exclusions
+├── docker-compose.yml            # Local dev stack (OpenHIM, Mongo, WireMock)
 ├── gradle/
 │   └── wrapper/                  # Wrapper JAR + properties
+├── wiremock/
+│   └── mappings/                 # WireMock stub mappings for Docker Compose
+│       └── collector-events-accepted.json
 ├── src/
 │   ├── main/
 │   │   ├── java/org/openphc/cce/emitter/
@@ -56,16 +62,20 @@ emitter-adaptor/
 │   │   └── resources/
 │   │       ├── application.yml
 │   │       ├── application-dev.yml
-│   │       └── application-prod.yml
+│   │       ├── application-prod.yml
+│   │       └── logback-spring.xml
 │   └── test/
 │       ├── java/org/openphc/cce/emitter/
+│       │   ├── integration/            # Integration tests
+│       │   └── ...                     # Unit test packages
 │       └── resources/
-│           ├── fhir/              # FHIR test fixtures
-│           └── ebuzima/           # eBUZIMA test fixtures
+│           ├── application-integration.yml
+│           ├── fhir/                   # FHIR test fixtures
+│           └── ebuzima/                # eBUZIMA test fixtures
 ├── docs/
 ├── .github/
 │   └── copilot-instructions.md
-└── emitter-adaptor-subtasks.txt
+└── artifacts/
 ```
 
 ## 4. Gradle Build Configuration
@@ -196,11 +206,17 @@ management:
       show-details: when-authorized
       probes:
         enabled: true
+    prometheus:
+      enabled: true
   health:
     livenessState:
       enabled: true
     readinessState:
       enabled: true
+  prometheus:
+    metrics:
+      export:
+        enabled: true
   metrics:
     tags:
       application: cce-emitter-adaptor
@@ -213,6 +229,8 @@ logging:
   pattern:
     console: "%d{ISO8601} [%thread] %-5level %logger{36} - %msg%n"
 ```
+
+> **Note:** `logback-spring.xml` overrides the console pattern with MDC fields for dev (human-readable) and prod (JSON) profiles. The `logging.pattern.console` in YAML is a fallback.
 
 ### application-dev.yml
 
@@ -275,7 +293,11 @@ openhim:
 cce:
   collector:
     url: ${CCE_COLLECTOR_URL}
+    events-path: ${CCE_COLLECTOR_EVENTS_PATH:/v1/events}
     timeout: ${CCE_COLLECTOR_TIMEOUT:5000}
+    retry:
+      max-attempts: ${CCE_COLLECTOR_RETRY_MAX_ATTEMPTS:3}
+      backoff-ms: ${CCE_COLLECTOR_RETRY_BACKOFF_MS:1000}
     auth:
       token: ${CCE_COLLECTOR_AUTH_TOKEN}
   emitter:
@@ -400,17 +422,25 @@ Create `wiremock/mappings/collector-events.json`:
 java -jar build/libs/cce-emitter-adaptor-1.0.0-SNAPSHOT.jar --spring.profiles.active=dev
 ```
 
-### Option C: Docker Compose (Full Stack)
+### Option C: Docker
 
 ```bash
-# Start dependencies
+# Build Docker image
+docker build -t cce-emitter-adaptor:latest .
+
+# Start local dev stack (OpenHIM, MongoDB, WireMock)
 docker compose up -d
 
 # Run application against local OpenHIM
 ./gradlew bootRun --args='--spring.profiles.active=dev'
 
-# Or run everything in Docker (requires a Dockerfile)
-docker compose --profile app up -d
+# Or run standalone container (production)
+docker run -p 8082:8082 \
+  -e SPRING_PROFILES_ACTIVE=prod \
+  -e OPENHIM_CORE_HOST=openhim-core \
+  -e CCE_COLLECTOR_URL=http://collector:8081 \
+  -e CCE_COLLECTOR_AUTH_TOKEN=<token> \
+  cce-emitter-adaptor:latest
 ```
 
 ## 8. Verifying the Setup
@@ -486,3 +516,36 @@ Expected: `202 Accepted` with `application/json+openhim` response.
 | OpenHIM registration fails | Check `openhim.core.host` and credentials. Non-fatal — mediator still functions. |
 | Collector 404 | Verify `cce.collector.url` and `cce.collector.events-path` |
 | Java 21 not found | Install Temurin 21: `sdk install java 21.0.5-tem` (SDKMAN) |
+
+## 12. Testing
+
+### Unit Tests
+
+```bash
+./gradlew test
+```
+
+Unit tests use JUnit 5 + Spring Boot Test. Located in `src/test/java/` mirroring the main package structure.
+
+### Integration Tests
+
+```bash
+# Run integration tests only
+./gradlew test --tests '*IntegrationTest'
+
+# Run a specific integration test
+./gradlew test --tests '*FullPipelineIntegrationTest'
+```
+
+Integration tests use `@ActiveProfiles("integration")` with `application-integration.yml`:
+- Random `server.port: 0` for test isolation
+- Programmatic `WireMockServer` + `@DynamicPropertySource` to inject Collector URL
+- Heartbeat disabled, fast retry (100ms backoff)
+
+| Test Class | Description |
+|------------|-------------|
+| `FullPipelineIntegrationTest` | End-to-end: FHIR → CloudEvent → Collector WireMock (happy path, source routing, Bundle ignore, duplicate handling, correlation ID) |
+| `RetryIntegrationTest` | Retry behavior: 503→exhaustion→502, 422→no retry, retry→eventual success, 400→no retry |
+| `ActuatorMetricsIntegrationTest` | Health probes, Prometheus scrape, custom metric registration (uses `TestRestTemplate`, not MockMvc) |
+
+**FHIR Fixtures:** `src/test/resources/fhir/encounter-visit.json`, `observation-lab.json`

@@ -63,6 +63,8 @@ sequenceDiagram
     Ctrl->>EvtSvc: process(inboundRequest)
     activate EvtSvc
 
+    Note over EvtSvc: Counter: cce.emitter.events.received
+
     EvtSvc->>Svc: adapt(inboundRequest)
     activate Svc
     Svc->>Svc: resolveSource(request) → sourceKey
@@ -73,12 +75,16 @@ sequenceDiagram
     deactivate Svc
 
     loop Each CloudEvent
+        Note over EvtSvc: MDC: correlationId, source, eventType, subject
         EvtSvc->>Fwd: forward(cloudEvent)
         activate Fwd
+        Note over Fwd: Timer: cce.emitter.collector.latency
         Fwd->>Col: POST /v1/events
         Col-->>Fwd: 202 Accepted
         Fwd-->>EvtSvc: CollectorResponse
         deactivate Fwd
+        Note over EvtSvc: Counter: cce.emitter.events.forwarded
+        Note over EvtSvc: MDC.clear()
     end
 
     EvtSvc->>EvtSvc: TransformationResult + Orchestration
@@ -127,6 +133,7 @@ sequenceDiagram
     else 400 Client Error
         Col-->>Fwd: 400 + { error: ... }
         Fwd->>Log: Client error — no retry
+        Note over Fwd: Counter: cce.emitter.events.rejected
         Fwd->>Fwd: throw CollectorClientException
     else 5xx / Timeout
         Col-->>Fwd: 503 Service Unavailable
@@ -150,6 +157,7 @@ sequenceDiagram
                 Col-->>Fwd: 202 Accepted
             else Exhausted
                 Col-->>Fwd: 503
+                Note over Fwd: Counter: cce.emitter.collector.retries
                 Fwd->>Fwd: @Recover → throw CollectorForwardingException
             end
         end

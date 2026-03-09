@@ -1,0 +1,180 @@
+# CCE Emitter Adaptor — OpenHIM Channel Setup Guide
+
+Step-by-step guide for the OpenHIM administrator to configure the CCE Emitter Adaptor as a secondary route on the existing eBUZIMA channel.
+
+---
+
+## 1. Prerequisites
+
+| Prerequisite | Detail |
+|-------------|--------|
+| OpenHIM Core | v8.4.3+ running and accessible |
+| OpenHIM Console | Accessible at `https://<console-host>:9000` |
+| Admin credentials | OpenHIM admin account with channel + mediator permissions |
+| Emitter Adaptor | Deployed and healthy (`/actuator/health/liveness` returns `UP`) |
+| Existing eBUZIMA channel | The channel that routes eBUZIMA EMR traffic to the SHR/other mediators |
+
+## 2. Verify Mediator Registration
+
+The Emitter Adaptor automatically registers with OpenHIM Core on startup. Verify this first.
+
+### Steps
+
+1. Log in to **OpenHIM Console** → navigate to **Mediators** tab
+2. Look for **CCE Emitter Adaptor** in the mediator list
+
+### Expected
+
+| Field | Value |
+|-------|-------|
+| Name | `CCE Emitter Adaptor` |
+| URN | `urn:mediator:cce-emitter-adaptor` |
+| Version | `1.0.0` |
+| Heartbeat | Active (green indicator, updating every ~10 seconds) |
+
+### If mediator is not visible
+
+- Check adaptor logs for registration errors:
+  ```bash
+  docker logs cce-emitter-adaptor 2>&1 | grep -i "mediator\|registration"
+  ```
+- Verify `OPENHIM_CORE_HOST`, `OPENHIM_USERNAME`, `OPENHIM_PASSWORD` env vars are correct
+- Registration failure is **non-fatal** — the adaptor still functions, but won't appear in OpenHIM Console
+
+## 3. Add Secondary Route to eBUZIMA Channel
+
+The adaptor uses an **empty `defaultChannelConfig`** by design — it does NOT auto-provision a channel. Instead, it is added as a **secondary route** on the existing eBUZIMA channel so that OpenHIM forwards a copy of each request to both the existing primary mediator (e.g., SHR) and the CCE Emitter Adaptor simultaneously.
+
+### Steps
+
+1. Navigate to **Channels** in OpenHIM Console
+2. Find and click the **existing eBUZIMA channel** (the one routing eBUZIMA EMR traffic)
+3. Go to the **Routes** tab
+4. Click **Add Route**
+5. Configure the route with the following values:
+
+| Field | Value | Notes |
+|-------|-------|-------|
+| **Route Name** | `CCE Emitter Adaptor` | Display name in Console |
+| **Host** | `<emitter-adaptor-host>` | Docker service name (e.g., `cce-emitter-adaptor`) or IP address |
+| **Port** | `8082` | Adaptor HTTP port |
+| **Path** | `/inbound` | Adaptor inbound endpoint |
+| **Primary** | **No** (unchecked) | **Critical** — must be secondary route |
+| **Route Type** | `HTTP` | Plain HTTP (or HTTPS if TLS configured) |
+| **Secured** | No | Unless adaptor has TLS configured |
+
+6. Click **Save** on the route
+7. Click **Save** on the channel
+
+### Route JSON (equivalent)
+
+If configuring via the OpenHIM Core API directly:
+
+```json
+{
+  "name": "CCE Emitter Adaptor",
+  "host": "cce-emitter-adaptor",
+  "port": 8082,
+  "path": "/inbound",
+  "primary": false,
+  "type": "http"
+}
+```
+
+### Why secondary route?
+
+| Aspect | Explanation |
+|--------|-------------|
+| **`primary: false`** | The adaptor does NOT return the primary response to the client. The existing primary route (SHR) remains the authoritative responder. |
+| **Copy of traffic** | OpenHIM Core sends a copy of each eBUZIMA request to both the primary route and all secondary routes simultaneously. |
+| **No disruption** | Adding a secondary route does not affect existing routing. If the adaptor is down, the primary route still functions normally. |
+| **Transaction log** | OpenHIM records the secondary route response in the transaction log for auditability. |
+
+## 4. Verify the Route
+
+### 4.1 Send a test request through the eBUZIMA channel
+
+```bash
+# Send a FHIR Encounter through the eBUZIMA OpenHIM channel
+curl -k -X POST https://<openhim-core-host>:5001/ebuzima \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Basic <base64-encoded-credentials>" \
+  -d '{
+    "resourceType": "Encounter",
+    "id": "channel-test-001",
+    "status": "finished",
+    "subject": {"reference": "Patient/260225-0002-5501"},
+    "period": {"start": "2026-03-09T10:00:00Z"}
+  }'
+```
+
+> **Note:** Replace the URL path (`/ebuzima`) with the actual eBUZIMA channel URL pattern.
+
+### 4.2 Check OpenHIM Transaction Log
+
+1. Navigate to **Transactions** in OpenHIM Console
+2. Find the transaction corresponding to the test request
+3. Expand the transaction to see **Routes**
+4. Verify:
+   - Primary route (SHR) shows its normal response
+   - **CCE Emitter Adaptor** secondary route shows `202 Accepted` with `application/json+openhim` response
+
+### 4.3 Check Adaptor Metrics
+
+```bash
+curl -s http://<adaptor-host>:8082/actuator/prometheus | grep cce_emitter_events_received
+# Expected: cce_emitter_events_received_total{source="ebuzima",path="/inbound"} 1.0
+```
+
+## 5. Request Headers Forwarded by OpenHIM
+
+OpenHIM Core automatically sets certain headers when forwarding to routes. The adaptor uses these for source resolution and metadata:
+
+| Header | Set By | Used For |
+|--------|--------|----------|
+| `X-OpenHIM-ClientID` | OpenHIM Core (after client auth) | Primary source resolution — matched against `cce.emitter.sources.<key>.client-id` |
+| `X-Source-System` | Source system (optional) | Fallback source resolution |
+| `X-Facility-Id` | Source system (optional) | Mapped to CloudEvent `facilityid` extension |
+| `X-Source-Event-Id` | Source system (optional) | Mapped to CloudEvent `sourceeventid` extension |
+| `X-Correlation-Id` | Source system or OpenHIM (optional) | Mapped to CloudEvent `correlationid`; generated by adaptor if absent |
+| `Content-Type` | Source system | Expected: `application/json` |
+
+### Client ID Configuration
+
+The `X-OpenHIM-ClientID` value sent by OpenHIM must match the configured client ID:
+
+```yaml
+# In the adaptor's application-prod.yml (via EBUZIMA_CLIENT_ID env var)
+cce:
+  emitter:
+    sources:
+      ebuzima:
+        client-id: ebuzima-emr-client  # Must match OpenHIM client ID
+```
+
+To find the eBUZIMA client ID in OpenHIM:
+1. Navigate to **Clients** in OpenHIM Console
+2. Find the eBUZIMA EMR client
+3. Note the **Client ID** value
+4. Set `EBUZIMA_CLIENT_ID` env var to this value when deploying the adaptor
+
+## 6. Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Adaptor not receiving requests | Route not added or channel not saved | Verify route exists on the eBUZIMA channel in OpenHIM Console |
+| `200 OK` with no processing | `X-OpenHIM-ClientID` doesn't match configured source | Check `EBUZIMA_CLIENT_ID` matches the OpenHIM client ID |
+| Adaptor returns `502` | CCE Collector unreachable or returning 5xx | Check `CCE_COLLECTOR_URL` and Collector health |
+| Route shows as down in Console | Adaptor container not running or port not accessible | Check `docker ps` and network connectivity on port 8082 |
+| Transaction log missing secondary route | Route configured as `primary: true` | Change route to `primary: false` |
+| `422 FHIR_MAPPING_ERROR` | Non-FHIR payload sent through the channel | Expected for non-FHIR requests — adaptor rejects gracefully |
+
+## 7. Removing the Route
+
+To stop forwarding traffic to the CCE Emitter Adaptor:
+
+1. Navigate to **Channels** → eBUZIMA channel → **Routes**
+2. Remove or disable the `CCE Emitter Adaptor` route
+3. Save the channel
+
+No cleanup is required on the adaptor side — it is stateless. The Collector handles deduplication, so no data impact from temporarily having the route active then removing it.

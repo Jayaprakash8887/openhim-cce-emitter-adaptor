@@ -1,5 +1,7 @@
 package org.openphc.cce.emitter.service;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -61,7 +63,8 @@ class CollectorForwardingServiceTest {
                 new CollectorProperties.AuthProperties("test-token")
         );
 
-        service = new CollectorForwardingService(collectorRestClient, properties);
+        service = new CollectorForwardingService(collectorRestClient, properties,
+                new SimpleMeterRegistry());
     }
 
     private void stubRestClientChain() {

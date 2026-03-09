@@ -61,9 +61,9 @@ eBUZIMA EMR → OpenHIM Core → Emitter Adaptor → CCE Collector → Kafka
 | Component | Description |
 |-----------|-------------|
 | `InboundEventController` | `@RestController` — receives POSTs from OpenHIM, delegates to `InboundEventService` |
-| `InboundEventService` | Orchestrates pipeline: source resolution → Collector forwarding → OpenHIM wrapping |
+| `InboundEventService` | Orchestrates pipeline: adapt → forward → wrap (+ metrics + MDC) |
 | `SourceAdaptorService` | Config-driven source resolution; parses FHIR resources, builds CloudEvents |
-| `CollectorForwardingService` | `@Retryable` — POSTs CloudEvents to Collector via `RestClient` |
+| `CollectorForwardingService` | `@Retryable` — POSTs CloudEvents to Collector via `RestClient` (+ latency timer) |
 | `MediatorRegistrar` | Registers with OpenHIM Core on startup |
 | `HeartbeatScheduler` | `@Scheduled` — periodic heartbeat for liveness |
 | `OpenHimResponseWrapper` | Wraps responses in `application/json+openhim` format |
@@ -80,19 +80,76 @@ src/main/java/org/openphc/cce/emitter/
 ├── cloudevents/       # CloudEventEnvelopeBuilder, EventIdGenerator
 ├── fhir/              # FhirResourceParser, PatientIdExtractor
 ├── service/           # InboundEventService (pipeline orchestration), CollectorForwardingService
-├── model/             # DTOs (CloudEventDto, InboundRequest, etc.)
+├── model/             # DTOs (CloudEventDto, InboundRequest, ProcessedEventsResponse, etc.)
 └── exception/         # Custom exceptions + GlobalExceptionHandler
 ```
+
+## Testing
+
+### Unit Tests
+
+```bash
+./gradlew test
+```
+
+### Integration Tests
+
+Integration tests boot the full Spring context with a WireMock-stubbed Collector:
+
+| Test Class | Scope |
+|-----------|-------|
+| `FullPipelineIntegrationTest` | End-to-end: FHIR resource → CloudEvent → Collector |
+| `RetryIntegrationTest` | Retry on 5xx, no retry on 4xx, retry-then-succeed |
+| `ActuatorMetricsIntegrationTest` | Health probes, Prometheus, custom metrics |
+
+All integration tests use `@ActiveProfiles("integration")` with `application-integration.yml`, which configures a random server port, fast retry backoff, and disabled heartbeat.
+
+```bash
+# Run integration tests only
+./gradlew test --tests "org.openphc.cce.emitter.integration.*"
+
+# Run all tests
+./gradlew test
+```
+
+## Docker
+
+### Build Image
+
+```bash
+docker build -t cce-emitter-adaptor .
+```
+
+### Local Development Stack
+
+```bash
+# Start OpenHIM Core + Console, MongoDB, WireMock Collector stub
+docker compose up -d
+
+# Run the adaptor locally against the stack
+./gradlew bootRun --args='--spring.profiles.active=dev'
+```
+
+| Service | Port | URL |
+|---------|------|-----|
+| OpenHIM Console | 9000 | http://localhost:9000 |
+| OpenHIM Core API | 8080 | https://localhost:8080 |
+| OpenHIM HTTP Channel | 5000 | http://localhost:5000 |
+| WireMock Collector | 5055 | http://localhost:5055 |
+| MongoDB | 27017 | — |
 
 ## Documentation
 
 | Document | Description |
 |----------|-------------|
-| [Architecture Overview](docs/architecture-overview.md) | System context, tech stack, package structure, processing pipeline, security, deployment |
-| [Developer Setup](docs/developer-setup.md) | Build, run, Docker Compose |
-| [Data Dictionary](docs/data-dictionary.md) | Field definitions, configuration properties |
-| [API Reference](docs/api-reference.md) | All endpoints, request/response examples |
-| [Flow Diagrams](docs/flow-diagrams.md) | Mermaid sequence & flow diagrams |
+| [Architecture Overview](docs/architecture-overview.md) | System context, tech stack, package structure, processing pipeline, security, deployment, observability |
+| [Developer Setup](docs/developer-setup.md) | Build, run, Docker, integration tests |
+| [Data Dictionary](docs/data-dictionary.md) | Field definitions, configuration properties, metrics, MDC context |
+| [API Reference](docs/api-reference.md) | All endpoints, request/response examples, Prometheus metrics |
+| [Flow Diagrams](docs/flow-diagrams.md) | Mermaid sequence & flow diagrams (with metrics/MDC annotations) |
+| [OpenHIM Channel Setup](docs/openhim-channel-setup.md) | Step-by-step guide to add the adaptor as a secondary route on an existing OpenHIM channel |
+| [Monitoring & Alerting](docs/monitoring-alerting.md) | Prometheus alert rules, Grafana dashboard panels, log-based monitoring, threshold recommendations |
+| [Release Notes v1.0.0](docs/release-notes-v1.0.0.md) | Production deployment guide, env vars, OpenHIM setup, smoke tests, rollback |
 
 ## Endpoints
 

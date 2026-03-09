@@ -173,6 +173,7 @@ org.openphc.cce.emitter/
 │   ├── InboundRequest.java                        #   Wraps incoming HTTP body + headers
 │   ├── SourceMetadata.java                        #   sourceIdentifier, facilityId, sourceEventId
 │   ├── TransformationResult.java                  #   Per-event success/failure detail
+│   ├── ProcessedEventsResponse.java               #   Typed success response body model
 │   └── CollectorResponse.java                     #   Response DTO from Collector
 │
 ├── exception/                                     # Custom exceptions
@@ -201,7 +202,7 @@ Single `@Component` that reads `cce.emitter.sources` config (sourceKey → clien
 | 4 | `SourceAdaptorService.adapt()` | Parses FHIR resource, builds `List<CloudEventDto>` (Bundle resources are silently ignored) |
 | 5 | `CollectorForwardingService.forward()` | POSTs each CloudEvent to Collector via `RestClient`; `@Retryable` on 5xx |
 | 6 | `OpenHimResponseWrapper.wrap()` | Wraps response + orchestration log in `application/json+openhim` format |
-| 7 | `InboundEventController` | Serializes `PipelineResult` envelope as `application/json+openhim` response |
+| 7 | `InboundEventController` | Serializes `OpenHimResponse` envelope as `application/json+openhim` response |
 
 ## 8. External Interfaces
 

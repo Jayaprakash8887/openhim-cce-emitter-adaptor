@@ -85,7 +85,7 @@ sequenceDiagram
     EvtSvc->>Wrap: wrap(result, 202, orchestrations)
     Wrap-->>EvtSvc: OpenHimResponse
 
-    EvtSvc-->>Ctrl: PipelineResult(envelope, httpStatus)
+    EvtSvc-->>Ctrl: OpenHimResponse
     deactivate EvtSvc
 
     Ctrl-->>OHC: 202 (application/json+openhim)

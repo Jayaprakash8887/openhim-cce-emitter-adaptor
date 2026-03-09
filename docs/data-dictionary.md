@@ -250,6 +250,37 @@ The admin adds the following route to the existing eBUZIMA channel via the OpenH
 | `response.body` | String | Response body (stringified) |
 | `response.timestamp` | String | When response was received |
 
+### 6.3 ProcessedEventsResponse (Success Body)
+
+The `response.body` field in a successful (202) OpenHIM envelope contains a `ProcessedEventsResponse` — a typed summary of all forwarded events.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | String | Always `"processed"` |
+| `eventsForwarded` | int | Number of events forwarded to the Collector |
+| `events` | Array | Per-event detail list |
+| `events[].eventId` | String | The CloudEvent ID |
+| `events[].type` | String | FHIR `resourceType` (CloudEvent `type`) |
+| `events[].subject` | String | Patient UPID |
+| `events[].collectorStatus` | String | Collector-reported status (`"accepted"` or `"duplicate"`) |
+
+**Example (serialized inside `response.body`):**
+
+```json
+{
+  "status": "processed",
+  "eventsForwarded": 1,
+  "events": [
+    {
+      "eventId": "evt-eb010001-0001-4000-8000-000000000001",
+      "type": "Encounter",
+      "subject": "260225-0002-5501",
+      "collectorStatus": "accepted"
+    }
+  ]
+}
+```
+
 ## 7. Metrics Reference
 
 | Metric Name | Type | Labels | Description |

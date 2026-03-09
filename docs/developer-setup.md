@@ -108,8 +108,8 @@ dependencies {
     implementation("ca.uhn.hapi.fhir:hapi-fhir-base:$hapiFhirVersion")
     implementation("ca.uhn.hapi.fhir:hapi-fhir-structures-r4:$hapiFhirVersion")
 
-    // Metrics
-    runtimeOnly("io.micrometer:micrometer-registry-prometheus")
+    // Observability
+    implementation("io.micrometer:micrometer-registry-prometheus")
 
     // Lombok (optional but recommended)
     compileOnly("org.projectlombok:lombok")

@@ -48,6 +48,7 @@ flowchart LR
 sequenceDiagram
     participant OHC as OpenHIM Core
     participant Ctrl as InboundEventController
+    participant EvtSvc as InboundEventService
     participant Svc as SourceAdaptorService
     participant CE as CloudEventEnvelopeBuilder
     participant Fwd as CollectorForwardingService
@@ -59,27 +60,33 @@ sequenceDiagram
 
     Ctrl->>Ctrl: InboundRequest.from(body, headers, path)
 
-    Ctrl->>Svc: adapt(inboundRequest)
+    Ctrl->>EvtSvc: process(inboundRequest)
+    activate EvtSvc
+
+    EvtSvc->>Svc: adapt(inboundRequest)
     activate Svc
     Svc->>Svc: resolveSource(request) → sourceKey
     Svc->>Svc: Parse FHIR resource (ignore if Bundle)
     Svc->>CE: build(fhirResource, patientUpid, type, metadata)
     CE-->>Svc: CloudEventDto
-    Svc-->>Ctrl: List<CloudEventDto>
+    Svc-->>EvtSvc: List<CloudEventDto>
     deactivate Svc
 
     loop Each CloudEvent
-        Ctrl->>Fwd: forward(cloudEvent)
+        EvtSvc->>Fwd: forward(cloudEvent)
         activate Fwd
         Fwd->>Col: POST /v1/events
         Col-->>Fwd: 202 Accepted
-        Fwd-->>Ctrl: CollectorResponse
+        Fwd-->>EvtSvc: CollectorResponse
         deactivate Fwd
     end
 
-    Ctrl->>Ctrl: TransformationResult from forwarding
-    Ctrl->>Wrap: wrap(result, 202, orchestrations)
-    Wrap-->>Ctrl: OpenHimResponse
+    EvtSvc->>EvtSvc: TransformationResult + Orchestration
+    EvtSvc->>Wrap: wrap(result, 202, orchestrations)
+    Wrap-->>EvtSvc: OpenHimResponse
+
+    EvtSvc-->>Ctrl: OpenHimResponse
+    deactivate EvtSvc
 
     Ctrl-->>OHC: 202 (application/json+openhim)
     deactivate Ctrl
@@ -193,7 +200,7 @@ flowchart TD
     D -->|No| E[Log debug + silently ignore<br/>→ 200 OK]
     D -->|Yes| F{FHIR resource valid?}
 
-    F -->|No| G[SourceAdaptorException<br/>→ 400 PAYLOAD_PARSE_ERROR]
+    F -->|No| G[FhirMappingException<br/>→ 422 FHIR_MAPPING_ERROR]
     F -->|Yes| H{Patient ID found?}
 
     H -->|No| I[PatientIdNotFoundException<br/>→ 400 PATIENT_ID_NOT_FOUND]
@@ -228,7 +235,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     CTRL[InboundEventController]
-    NORM[EventProcessingService]
+    EVTSVC[InboundEventService]
     REG[SourceAdaptorService]
     FWD[CollectorForwardingService]
     WRAP[OpenHimResponseWrapper]
@@ -246,11 +253,12 @@ flowchart TD
     FC["FhirConfig<br/>@Bean FhirContext"]
     RC["RestClientConfig<br/>@Bean RestClient"]
 
-    CTRL --> NORM
-    CTRL --> FWD
-    CTRL --> WRAP
+    CTRL --> EVTSVC
 
-    NORM --> REG
+    EVTSVC --> REG
+    EVTSVC --> FWD
+    EVTSVC --> WRAP
+
     REG --> SA_ABS
 
     SA_ABS --> CE

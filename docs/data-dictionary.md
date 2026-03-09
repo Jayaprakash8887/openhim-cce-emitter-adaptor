@@ -68,7 +68,8 @@ For the full list of inbound headers, see [API Reference — §2.1 POST /inbound
 | `body` | String | HTTP body | Raw request body |
 | `headers` | Map<String, String> | HTTP headers (normalized to lowercase keys) | All request headers |
 | `path` | String | `HttpServletRequest.getRequestURI()` | Request path |
-| `metadata` | SourceMetadata | Extracted from headers + path | Structured source context |
+
+> **Note:** `InboundRequest` is immutable — created via static `from()` factory methods. Source metadata (`SourceMetadata`) is built separately in `SourceAdaptorService` from request headers.
 
 ### 2.3 SourceMetadata Fields
 
@@ -248,6 +249,37 @@ The admin adds the following route to the existing eBUZIMA channel via the OpenH
 | `response.status` | int | Response HTTP status |
 | `response.body` | String | Response body (stringified) |
 | `response.timestamp` | String | When response was received |
+
+### 6.3 ProcessedEventsResponse (Success Body)
+
+The `response.body` field in a successful (202) OpenHIM envelope contains a `ProcessedEventsResponse` — a typed summary of all forwarded events.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | String | Always `"processed"` |
+| `eventsForwarded` | int | Number of events forwarded to the Collector |
+| `events` | Array | Per-event detail list |
+| `events[].eventId` | String | The CloudEvent ID |
+| `events[].type` | String | FHIR `resourceType` (CloudEvent `type`) |
+| `events[].subject` | String | Patient UPID |
+| `events[].collectorStatus` | String | Collector-reported status (`"accepted"` or `"duplicate"`) |
+
+**Example (serialized inside `response.body`):**
+
+```json
+{
+  "status": "processed",
+  "eventsForwarded": 1,
+  "events": [
+    {
+      "eventId": "evt-eb010001-0001-4000-8000-000000000001",
+      "type": "Encounter",
+      "subject": "260225-0002-5501",
+      "collectorStatus": "accepted"
+    }
+  ]
+}
+```
 
 ## 7. Metrics Reference
 

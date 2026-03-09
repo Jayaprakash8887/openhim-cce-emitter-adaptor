@@ -49,16 +49,6 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    void handleSourceAdaptorException_returns400WithCorrectCode() {
-        SourceAdaptorException ex = new SourceAdaptorException("Adaptor processing failed for source: ebuzima");
-
-        ResponseEntity<Map<String, Object>> response = handler.handleSourceAdaptorException(ex);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertErrorBody(response, "SOURCE_ADAPTOR_ERROR", "Adaptor processing failed for source: ebuzima");
-    }
-
-    @Test
     void handleCollectorClientException_returns4xxStatusFromException() {
         CollectorClientException ex = new CollectorClientException("Validation failed: missing type field", 422);
 

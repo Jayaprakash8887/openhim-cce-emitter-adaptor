@@ -51,18 +51,4 @@ public class FhirResourceParser {
         }
     }
 
-    /**
-     * Detects the FHIR resource type from a JSON string without full parsing.
-     *
-     * <p>Parses the resource and returns the {@code resourceType} value
-     * (e.g., {@code "Encounter"}, {@code "Observation"}).
-     *
-     * @param json the raw FHIR JSON string
-     * @return the FHIR resource type name
-     * @throws FhirMappingException if the JSON cannot be parsed
-     */
-    public String detectResourceType(String json) {
-        IBaseResource resource = parse(json);
-        return resource.fhirType();
-    }
 }

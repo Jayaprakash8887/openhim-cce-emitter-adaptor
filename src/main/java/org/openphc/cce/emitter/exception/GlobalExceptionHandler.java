@@ -50,12 +50,6 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.BAD_GATEWAY, "COLLECTOR_FORWARDING_ERROR", ex.getMessage());
     }
 
-    @ExceptionHandler(SourceAdaptorException.class)
-    public ResponseEntity<Map<String, Object>> handleSourceAdaptorException(SourceAdaptorException ex) {
-        log.warn("Source adaptor error: {}", ex.getMessage());
-        return buildErrorResponse(HttpStatus.BAD_REQUEST, "SOURCE_ADAPTOR_ERROR", ex.getMessage());
-    }
-
     @ExceptionHandler(CollectorClientException.class)
     public ResponseEntity<Map<String, Object>> handleCollectorClientException(CollectorClientException ex) {
         log.warn("Collector client error ({}): {}", ex.getStatusCode(), ex.getMessage());

@@ -16,8 +16,6 @@ import org.openphc.cce.emitter.model.CollectorResponse;
 import org.openphc.cce.emitter.model.InboundRequest;
 import org.openphc.cce.emitter.openhim.OpenHimResponseWrapper;
 import org.openphc.cce.emitter.openhim.model.OpenHimResponse;
-import org.openphc.cce.emitter.service.InboundEventService.PipelineResult;
-import org.springframework.http.HttpStatus;
 
 import java.util.List;
 import java.util.Map;
@@ -106,13 +104,12 @@ class InboundEventServiceTest {
             when(sourceAdaptorService.adapt(any())).thenReturn(List.of(sampleCloudEvent()));
             when(collectorForwardingService.forward(any())).thenReturn(successResponse());
 
-            PipelineResult result = service.process(sampleRequest());
+            OpenHimResponse result = service.process(sampleRequest());
 
-            assertThat(result.httpStatus()).isEqualTo(HttpStatus.ACCEPTED);
-            assertThat(result.envelope().getStatus()).isEqualTo("Successful");
-            assertThat(result.envelope().getResponse().getStatus()).isEqualTo(202);
-            assertThat(result.envelope().getOrchestrations()).hasSize(1);
-            assertThat(result.envelope().getOrchestrations().get(0).getName())
+            assertThat(result.getResponse().getStatus()).isEqualTo(202);
+            assertThat(result.getStatus()).isEqualTo("Successful");
+            assertThat(result.getOrchestrations()).hasSize(1);
+            assertThat(result.getOrchestrations().get(0).getName())
                     .isEqualTo("Forward to CCE Collector");
         }
 
@@ -121,9 +118,9 @@ class InboundEventServiceTest {
             when(sourceAdaptorService.adapt(any())).thenReturn(List.of(sampleCloudEvent()));
             when(collectorForwardingService.forward(any())).thenReturn(successResponse());
 
-            PipelineResult result = service.process(sampleRequest());
+            OpenHimResponse result = service.process(sampleRequest());
 
-            OpenHimResponse.Orchestration orch = result.envelope().getOrchestrations().get(0);
+            OpenHimResponse.Orchestration orch = result.getOrchestrations().get(0);
             assertThat(orch.getRequest().getMethod()).isEqualTo("POST");
             assertThat(orch.getRequest().getPath()).isEqualTo("/v1/events");
             assertThat(orch.getResponse().getStatus()).isEqualTo(202);
@@ -134,9 +131,9 @@ class InboundEventServiceTest {
             when(sourceAdaptorService.adapt(any())).thenReturn(List.of(sampleCloudEvent()));
             when(collectorForwardingService.forward(any())).thenReturn(successResponse());
 
-            PipelineResult result = service.process(sampleRequest());
+            OpenHimResponse result = service.process(sampleRequest());
 
-            String body = result.envelope().getResponse().getBody();
+            String body = result.getResponse().getBody();
             assertThat(body).contains("\"status\":\"processed\"");
             assertThat(body).contains("\"eventsForwarded\":1");
         }
@@ -154,11 +151,11 @@ class InboundEventServiceTest {
                     new CollectorResponse(
                             new CollectorResponse.DataPayload("evt-002", "accepted", "corr-002", null), null));
 
-            PipelineResult result = service.process(sampleRequest());
+            OpenHimResponse result = service.process(sampleRequest());
 
-            assertThat(result.httpStatus()).isEqualTo(HttpStatus.ACCEPTED);
-            assertThat(result.envelope().getOrchestrations()).hasSize(2);
-            assertThat(result.envelope().getResponse().getBody())
+            assertThat(result.getResponse().getStatus()).isEqualTo(202);
+            assertThat(result.getOrchestrations()).hasSize(2);
+            assertThat(result.getResponse().getBody())
                     .contains("\"eventsForwarded\":2");
             verify(collectorForwardingService, times(2)).forward(any());
         }
@@ -168,10 +165,10 @@ class InboundEventServiceTest {
             when(sourceAdaptorService.adapt(any())).thenReturn(List.of(sampleCloudEvent()));
             when(collectorForwardingService.forward(any())).thenReturn(duplicateResponse());
 
-            PipelineResult result = service.process(sampleRequest());
+            OpenHimResponse result = service.process(sampleRequest());
 
-            assertThat(result.httpStatus()).isEqualTo(HttpStatus.ACCEPTED);
-            assertThat(result.envelope().getOrchestrations().get(0).getResponse().getStatus())
+            assertThat(result.getResponse().getStatus()).isEqualTo(202);
+            assertThat(result.getOrchestrations().get(0).getResponse().getStatus())
                     .isEqualTo(200);
         }
     }
@@ -185,13 +182,12 @@ class InboundEventServiceTest {
         void noEventsProduced_returns200WithIgnoredStatus() {
             when(sourceAdaptorService.adapt(any())).thenReturn(List.of());
 
-            PipelineResult result = service.process(sampleRequest());
+            OpenHimResponse result = service.process(sampleRequest());
 
-            assertThat(result.httpStatus()).isEqualTo(HttpStatus.OK);
-            assertThat(result.envelope().getStatus()).isEqualTo("Successful");
-            assertThat(result.envelope().getResponse().getStatus()).isEqualTo(200);
-            assertThat(result.envelope().getResponse().getBody()).contains("ignored");
-            assertThat(result.envelope().getOrchestrations()).isEmpty();
+            assertThat(result.getResponse().getStatus()).isEqualTo(200);
+            assertThat(result.getStatus()).isEqualTo("Successful");
+            assertThat(result.getResponse().getBody()).contains("ignored");
+            assertThat(result.getOrchestrations()).isEmpty();
         }
 
         @Test

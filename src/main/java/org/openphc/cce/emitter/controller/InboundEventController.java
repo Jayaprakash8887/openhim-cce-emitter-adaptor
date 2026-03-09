@@ -1,12 +1,13 @@
 package org.openphc.cce.emitter.controller;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.servlet.http.HttpServletRequest;
 
 import org.openphc.cce.emitter.model.InboundRequest;
+import org.openphc.cce.emitter.openhim.model.OpenHimResponse;
 import org.openphc.cce.emitter.service.InboundEventService;
-import org.openphc.cce.emitter.service.InboundEventService.PipelineResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
@@ -56,33 +57,24 @@ public class InboundEventController {
      * @param headers HTTP request headers
      * @param request the servlet request (for path extraction)
      * @return OpenHIM envelope response with 202 on success, 200 on silent ignore
+     * @throws JsonProcessingException if JSON serialization fails
      */
     @PostMapping
     public ResponseEntity<String> handleInbound(
             @RequestBody(required = false) String body,
             @RequestHeader Map<String, String> headers,
-            HttpServletRequest request) {
+            HttpServletRequest request) throws JsonProcessingException {
 
         log.debug("Inbound request received: path={}, contentLength={}",
                 request.getRequestURI(), body != null ? body.length() : 0);
 
         InboundRequest inboundRequest = InboundRequest.from(body, headers, request);
-        PipelineResult result = inboundEventService.process(inboundRequest);
+        OpenHimResponse envelope = inboundEventService.process(inboundRequest);
 
-        return ResponseEntity.status(result.httpStatus())
+        return ResponseEntity.status(envelope.getResponse().getStatus())
                 .contentType(OPENHIM_MEDIA_TYPE)
-                .body(toJson(result.envelope()));
+                .body(objectMapper.writeValueAsString(envelope));
     }
 
-    /**
-     * Serializes any object to JSON, returning {@code "{}"} on failure.
-     */
-    private String toJson(Object obj) {
-        try {
-            return objectMapper.writeValueAsString(obj);
-        } catch (Exception ex) {
-            log.warn("JSON serialization failed: {}", ex.getMessage());
-            return "{}";
-        }
-    }
 }
+        

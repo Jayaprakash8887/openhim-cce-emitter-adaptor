@@ -8,6 +8,7 @@ import org.openphc.cce.emitter.config.CollectorProperties;
 import org.openphc.cce.emitter.model.CloudEventDto;
 import org.openphc.cce.emitter.model.CollectorResponse;
 import org.openphc.cce.emitter.model.InboundRequest;
+import org.openphc.cce.emitter.model.ProcessedEventsResponse;
 import org.openphc.cce.emitter.model.TransformationResult;
 import org.openphc.cce.emitter.openhim.OpenHimResponseWrapper;
 import org.openphc.cce.emitter.openhim.model.OpenHimResponse;
@@ -60,9 +61,9 @@ public class InboundEventService {
      * Processes an inbound request through the full pipeline.
      *
      * @param inboundRequest the normalized inbound request
-     * @return the result containing the OpenHIM envelope and HTTP status
+     * @return the OpenHIM response envelope (HTTP status embedded in {@code response.status})
      */
-    public PipelineResult process(InboundRequest inboundRequest) {
+    public OpenHimResponse process(InboundRequest inboundRequest) {
         // 1. Source resolution + FHIR → CloudEvent transformation
         List<CloudEventDto> events = sourceAdaptorService.adapt(inboundRequest);
 
@@ -72,9 +73,7 @@ public class InboundEventService {
             JsonNode responseBody = objectMapper.createObjectNode()
                     .put("status", "ignored")
                     .put("message", "No matching source or non-processable payload");
-            OpenHimResponse envelope = responseWrapper.wrap(
-                    responseBody, HttpStatus.OK, List.of());
-            return new PipelineResult(envelope, HttpStatus.OK);
+            return responseWrapper.wrap(responseBody, HttpStatus.OK, List.of());
         }
 
         // 3. Forward each CloudEvent to the Collector and collect results
@@ -89,13 +88,13 @@ public class InboundEventService {
         }
 
         // 4. Build success response
-        JsonNode responseBody = buildSuccessBody(results);
+        JsonNode responseBody = objectMapper.valueToTree(ProcessedEventsResponse.from(results));
         OpenHimResponse envelope = responseWrapper.wrap(
                 responseBody, HttpStatus.ACCEPTED, orchestrations);
 
         log.info("Inbound request processed: {} event(s) forwarded", results.size());
 
-        return new PipelineResult(envelope, HttpStatus.ACCEPTED);
+        return envelope;
     }
 
     // ==================== Helper methods ====================
@@ -124,24 +123,6 @@ public class InboundEventService {
                 .build();
     }
 
-    private JsonNode buildSuccessBody(List<TransformationResult> results) {
-        var root = objectMapper.createObjectNode();
-        root.put("status", "processed");
-        root.put("eventsForwarded", results.size());
-
-        var eventsArray = root.putArray("events");
-        for (TransformationResult result : results) {
-            var entry = objectMapper.createObjectNode();
-            entry.put("eventId", result.event().getId());
-            entry.put("type", result.event().getType());
-            entry.put("subject", result.event().getSubject());
-            entry.put("collectorStatus", result.collectorStatus());
-            eventsArray.add(entry);
-        }
-
-        return root;
-    }
-
     private String toJson(Object obj) {
         try {
             return objectMapper.writeValueAsString(obj);
@@ -156,8 +137,4 @@ public class InboundEventService {
                 .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
     }
 
-    /**
-     * Holds the pipeline output: OpenHIM response envelope and the HTTP status.
-     */
-    public record PipelineResult(OpenHimResponse envelope, HttpStatus httpStatus) {}
 }

@@ -13,8 +13,6 @@ import org.openphc.cce.emitter.exception.CollectorForwardingException;
 import org.openphc.cce.emitter.exception.GlobalExceptionHandler;
 import org.openphc.cce.emitter.openhim.model.OpenHimResponse;
 import org.openphc.cce.emitter.service.InboundEventService;
-import org.openphc.cce.emitter.service.InboundEventService.PipelineResult;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -75,8 +73,8 @@ class InboundEventControllerTest {
             }
             """;
 
-    private PipelineResult acceptedResult() {
-        OpenHimResponse envelope = OpenHimResponse.builder()
+    private OpenHimResponse acceptedResult() {
+        return OpenHimResponse.builder()
                 .mediatorUrn("urn:mediator:cce-emitter-adaptor")
                 .status("Successful")
                 .response(OpenHimResponse.Response.builder()
@@ -99,11 +97,10 @@ class InboundEventControllerTest {
                                         .build())
                                 .build()))
                 .build();
-        return new PipelineResult(envelope, HttpStatus.ACCEPTED);
     }
 
-    private PipelineResult ignoredResult() {
-        OpenHimResponse envelope = OpenHimResponse.builder()
+    private OpenHimResponse ignoredResult() {
+        return OpenHimResponse.builder()
                 .mediatorUrn("urn:mediator:cce-emitter-adaptor")
                 .status("Successful")
                 .response(OpenHimResponse.Response.builder()
@@ -114,7 +111,6 @@ class InboundEventControllerTest {
                         .build())
                 .orchestrations(List.of())
                 .build();
-        return new PipelineResult(envelope, HttpStatus.OK);
     }
 
     // ==================== Successful forwarding (202 Accepted) ====================

@@ -165,6 +165,7 @@ org.openphc.cce.emitter/
 │   └── PatientIdExtractor.java                    #   Extract patient UPID from FHIR resources
 │
 ├── service/                                       # Business logic
+│   ├── InboundEventService.java                   #   Orchestrates pipeline: adapt → forward → wrap
 │   └── CollectorForwardingService.java            #   @Retryable: POST to Collector via RestClient
 │
 ├── model/                                         # DTOs
@@ -194,12 +195,13 @@ Single `@Component` that reads `cce.emitter.sources` config (sourceKey → clien
 
 | Step | Component | Description |
 |------|-----------|-------------|
-| 1 | `InboundEventController` | Receives HTTP POST, extracts body, headers, path |
-| 2 | `InboundRequest.from()` | Wraps raw data into domain object with `SourceMetadata` |
+| 1 | `InboundEventController` | Receives HTTP POST, creates `InboundRequest`, delegates to `InboundEventService` |
+| 2 | `InboundEventService.process()` | Orchestrates the full pipeline (steps 3–7) |
 | 3 | `SourceAdaptorService.resolveSource()` | Matches `X-OpenHIM-ClientID` / `X-Source-System` headers against configured sources |
 | 4 | `SourceAdaptorService.adapt()` | Parses FHIR resource, builds `List<CloudEventDto>` (Bundle resources are silently ignored) |
 | 5 | `CollectorForwardingService.forward()` | POSTs each CloudEvent to Collector via `RestClient`; `@Retryable` on 5xx |
 | 6 | `OpenHimResponseWrapper.wrap()` | Wraps response + orchestration log in `application/json+openhim` format |
+| 7 | `InboundEventController` | Serializes `PipelineResult` envelope as `application/json+openhim` response |
 
 ## 8. External Interfaces
 

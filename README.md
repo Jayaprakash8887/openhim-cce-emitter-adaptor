@@ -60,7 +60,8 @@ eBUZIMA EMR → OpenHIM Core → Emitter Adaptor → CCE Collector → Kafka
 
 | Component | Description |
 |-----------|-------------|
-| `InboundEventController` | `@RestController` — receives POSTs from OpenHIM |
+| `InboundEventController` | `@RestController` — receives POSTs from OpenHIM, delegates to `InboundEventService` |
+| `InboundEventService` | Orchestrates pipeline: source resolution → Collector forwarding → OpenHIM wrapping |
 | `SourceAdaptorService` | Config-driven source resolution; parses FHIR resources, builds CloudEvents |
 | `CollectorForwardingService` | `@Retryable` — POSTs CloudEvents to Collector via `RestClient` |
 | `MediatorRegistrar` | Registers with OpenHIM Core on startup |
@@ -78,7 +79,7 @@ src/main/java/org/openphc/cce/emitter/
 ├── adaptor/           # SourceAdaptorService (config-driven source routing)
 ├── cloudevents/       # CloudEventEnvelopeBuilder, EventIdGenerator
 ├── fhir/              # FhirResourceParser, PatientIdExtractor
-├── service/           # CollectorForwardingService
+├── service/           # InboundEventService (pipeline orchestration), CollectorForwardingService
 ├── model/             # DTOs (CloudEventDto, InboundRequest, etc.)
 └── exception/         # Custom exceptions + GlobalExceptionHandler
 ```

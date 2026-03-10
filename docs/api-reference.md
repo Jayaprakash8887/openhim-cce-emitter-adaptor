@@ -216,7 +216,15 @@ Spring Boot Actuator endpoints exposed for operations.
 ```
 # HELP cce_emitter_events_received_total Total inbound events received
 # TYPE cce_emitter_events_received_total counter
-cce_emitter_events_received_total{source="ebuzima"} 42.0
+cce_emitter_events_received_total{source="ebuzima",path="/inbound"} 42.0
+
+# HELP cce_emitter_events_forwarded_total Events forwarded to Collector
+# TYPE cce_emitter_events_forwarded_total counter
+cce_emitter_events_forwarded_total{source="ebuzima"} 40.0
+
+# HELP cce_emitter_events_duplicate_total Duplicate events
+# TYPE cce_emitter_events_duplicate_total counter
+cce_emitter_events_duplicate_total 2.0
 
 # HELP cce_emitter_collector_latency_seconds Collector forwarding latency
 # TYPE cce_emitter_collector_latency_seconds summary
@@ -271,7 +279,7 @@ Content-Type: application/json
 
 ```
 POST <collector-url>/v1/events
-Authorization: <passed through from inbound request>
+Authorization: Bearer <cce.collector.auth.token>
 Content-Type: application/json
 
 {
@@ -282,6 +290,8 @@ Content-Type: application/json
   ...
 }
 ```
+
+> **Note:** The adaptor authenticates to the CCE Collector (via CCE Gateway) using a static Bearer token configured in `cce.collector.auth.token`. This is separate from the inbound OpenHIM channel auth.
 
 **Success:** `202 Accepted`
 **Duplicate:** `200 OK`

@@ -1,0 +1,74 @@
+version: "3.8"
+
+# Local development stack for CCE Emitter Adaptor
+# Provides OpenHIM Core + Console, MongoDB, and a WireMock CCE Collector stub.
+#
+# Usage:
+#   docker compose up -d              # Start all services
+#   docker compose up -d openhim-core # Start OpenHIM only
+#   docker compose logs -f            # Follow logs
+#   docker compose down               # Stop and remove containers
+
+services:
+  # ==================== MongoDB (OpenHIM backend) ====================
+  mongo:
+    image: mongo:7.0
+    container_name: cce-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ==================== OpenHIM Core ====================
+  openhim-core:
+    image: jembi/openhim-core:v8.4.3
+    container_name: cce-openhim-core
+    ports:
+      - "5000:5000"   # HTTP channel listener
+      - "5001:5001"   # HTTPS channel listener
+      - "8080:8080"   # Core API (HTTPS)
+    environment:
+      - mongo_url=mongodb://mongo/openhim
+      - mongo_atnaUrl=mongodb://mongo/openhim
+      - api_authenticationTypes=["local"]
+    depends_on:
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-skf", "https://localhost:8080/heartbeat"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  # ==================== OpenHIM Console ====================
+  openhim-console:
+    image: jembi/openhim-console:v1.18.4
+    container_name: cce-openhim-console
+    ports:
+      - "9000:80"
+    depends_on:
+      openhim-core:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ==================== WireMock (CCE Collector stub) ====================
+  wiremock-collector:
+    image: wiremock/wiremock:3.9.0
+    container_name: cce-collector-stub
+    ports:
+      - "5055:8080"
+    volumes:
+      - ./wiremock:/home/wiremock
+    command: ["--verbose"]
+    restart: unless-stopped
+
+volumes:
+  mongo-data:

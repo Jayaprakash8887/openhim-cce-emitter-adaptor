@@ -1,0 +1,20 @@
+{
+  "request": {
+    "method": "POST",
+    "url": "/v1/events"
+  },
+  "response": {
+    "status": 202,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "data": {
+        "eventId": "stub-evt-001",
+        "status": "accepted",
+        "correlationId": "stub-corr-001",
+        "timestamp": "2026-02-25T08:00:00Z"
+      }
+    }
+  }
+}

@@ -131,7 +131,7 @@ Prefix: `cce.emitter.sources`
 |----------|------|---------|-------------|
 | `cce.emitter.sources.ebuzima.client-id` | String | `ebuzima-emr-client` | OpenHIM client ID for eBUZIMA EMR. Matched against `X-OpenHIM-ClientID` or `X-Source-System` header for adaptor routing. |
 
-### 3.4 Server Properties
+### 3.5 Server Properties
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
@@ -283,11 +283,24 @@ The `response.body` field in a successful (202) OpenHIM envelope contains a `Pro
 
 ## 7. Metrics Reference
 
-| Metric Name | Type | Labels | Description |
-|-------------|------|--------|-------------|
-| `cce.emitter.events.received` | Counter | `source`, `path` | Total inbound events received |
-| `cce.emitter.events.transformed` | Counter | `source`, `resource_type` | Events successfully transformed |
-| `cce.emitter.events.forwarded` | Counter | `source` | Events forwarded to Collector |
-| `cce.emitter.events.rejected` | Counter | `source`, `reason` | Events that failed transformation |
-| `cce.emitter.collector.latency` | Timer | — | Collector forwarding latency |
-| `cce.emitter.collector.retries` | Counter | — | Retry attempts to Collector |
+Registered in `InboundEventService` and `CollectorForwardingService` via constructor-injected `MeterRegistry`.
+
+| Metric Name | Type | Tags | Registered In | Description |
+|-------------|------|------|---------------|-------------|
+| `cce.emitter.events.received` | Counter | `source`, `path` | `InboundEventService` | Total inbound events received |
+| `cce.emitter.events.forwarded` | Counter | `source` | `InboundEventService` | Events successfully forwarded to Collector |
+| `cce.emitter.events.duplicate` | Counter | — | `InboundEventService` | Duplicate events (Collector returned 200) |
+| `cce.emitter.events.rejected` | Counter | — | `CollectorForwardingService` | Events rejected by Collector (4xx) |
+| `cce.emitter.collector.latency` | Timer | — | `CollectorForwardingService` | Collector forwarding round-trip latency |
+| `cce.emitter.collector.retries` | Counter | — | `CollectorForwardingService` | Retry attempts exhausted |
+
+## 8. MDC Context Fields
+
+`InboundEventService` populates SLF4J MDC per-event with `try/finally` to ensure cleanup. These fields are included in all log output during event processing.
+
+| MDC Key | Source | Description |
+|---------|--------|-------------|
+| `correlationId` | `X-Correlation-Id` header or generated | Trace correlation ID |
+| `source` | Resolved source key | Source system identifier (e.g., `"ebuzima"`) |
+| `eventType` | FHIR `resourceType` | CloudEvents `type` field |
+| `subject` | Patient UPID | Patient identifier for the event |

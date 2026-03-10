@@ -3,6 +3,9 @@ package org.openphc.cce.emitter.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+
 import org.openphc.cce.emitter.adaptor.SourceAdaptorService;
 import org.openphc.cce.emitter.config.CollectorProperties;
 import org.openphc.cce.emitter.model.CloudEventDto;
@@ -14,6 +17,7 @@ import org.openphc.cce.emitter.openhim.OpenHimResponseWrapper;
 import org.openphc.cce.emitter.openhim.model.OpenHimResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -43,18 +47,21 @@ public class InboundEventService {
     private final OpenHimResponseWrapper responseWrapper;
     private final CollectorProperties collectorProperties;
     private final ObjectMapper objectMapper;
+    private final MeterRegistry meterRegistry;
 
     public InboundEventService(
             SourceAdaptorService sourceAdaptorService,
             CollectorForwardingService collectorForwardingService,
             OpenHimResponseWrapper responseWrapper,
             CollectorProperties collectorProperties,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            MeterRegistry meterRegistry) {
         this.sourceAdaptorService = sourceAdaptorService;
         this.collectorForwardingService = collectorForwardingService;
         this.responseWrapper = responseWrapper;
         this.collectorProperties = collectorProperties;
         this.objectMapper = objectMapper;
+        this.meterRegistry = meterRegistry;
     }
 
     /**
@@ -64,6 +71,13 @@ public class InboundEventService {
      * @return the OpenHIM response envelope (HTTP status embedded in {@code response.status})
      */
     public OpenHimResponse process(InboundRequest inboundRequest) {
+        String source = inboundRequest.getHeader("x-openhim-clientid").orElse("unknown");
+        String path = inboundRequest.getPath();
+
+        Counter.builder("cce.emitter.events.received")
+                .tag("source", source).tag("path", path)
+                .register(meterRegistry).increment();
+
         // 1. Source resolution + FHIR → CloudEvent transformation
         List<CloudEventDto> events = sourceAdaptorService.adapt(inboundRequest);
 
@@ -81,10 +95,18 @@ public class InboundEventService {
         List<OpenHimResponse.Orchestration> orchestrations = new ArrayList<>();
 
         for (CloudEventDto event : events) {
-            String requestTimestamp = nowUtc();
-            CollectorResponse collectorResponse = collectorForwardingService.forward(event);
-            results.add(TransformationResult.from(event, collectorResponse));
-            orchestrations.add(buildOrchestration(event, collectorResponse, requestTimestamp));
+            populateMdc(event);
+            try {
+                String requestTimestamp = nowUtc();
+                CollectorResponse collectorResponse = collectorForwardingService.forward(event);
+                TransformationResult result = TransformationResult.from(event, collectorResponse);
+                results.add(result);
+                orchestrations.add(buildOrchestration(event, collectorResponse, requestTimestamp));
+
+                trackForwardingMetrics(event, result.collectorStatus());
+            } finally {
+                clearMdc();
+            }
         }
 
         // 4. Build success response
@@ -95,6 +117,32 @@ public class InboundEventService {
         log.info("Inbound request processed: {} event(s) forwarded", results.size());
 
         return envelope;
+    }
+
+    private void trackForwardingMetrics(CloudEventDto event, String collectorStatus) {
+        String eventSource = event.getSource() != null ? event.getSource() : "unknown";
+        if ("duplicate".equals(collectorStatus)) {
+            Counter.builder("cce.emitter.events.duplicate")
+                    .register(meterRegistry).increment();
+        } else {
+            Counter.builder("cce.emitter.events.forwarded")
+                    .tag("source", eventSource)
+                    .register(meterRegistry).increment();
+        }
+    }
+
+    private void populateMdc(CloudEventDto event) {
+        if (event.getCorrelationid() != null) MDC.put("correlationId", event.getCorrelationid());
+        if (event.getSource() != null) MDC.put("source", event.getSource());
+        if (event.getType() != null) MDC.put("eventType", event.getType());
+        if (event.getSubject() != null) MDC.put("subject", event.getSubject());
+    }
+
+    private void clearMdc() {
+        MDC.remove("correlationId");
+        MDC.remove("source");
+        MDC.remove("eventType");
+        MDC.remove("subject");
     }
 
     // ==================== Helper methods ====================

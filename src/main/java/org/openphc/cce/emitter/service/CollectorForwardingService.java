@@ -1,5 +1,9 @@
 package org.openphc.cce.emitter.service;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+
 import org.openphc.cce.emitter.config.CollectorProperties;
 import org.openphc.cce.emitter.exception.CollectorClientException;
 import org.openphc.cce.emitter.exception.CollectorForwardingException;
@@ -45,12 +49,27 @@ public class CollectorForwardingService {
 
     private final RestClient collectorRestClient;
     private final CollectorProperties collectorProperties;
+    private final Timer collectorLatencyTimer;
+    private final Counter retriesCounter;
+    private final Counter rejectedCounter;
 
     public CollectorForwardingService(
             @Qualifier("collectorRestClient") RestClient collectorRestClient,
-            CollectorProperties collectorProperties) {
+            CollectorProperties collectorProperties,
+            MeterRegistry meterRegistry) {
         this.collectorRestClient = collectorRestClient;
         this.collectorProperties = collectorProperties;
+        this.collectorLatencyTimer = Timer.builder("cce.emitter.collector.latency")
+                .description("Collector forwarding latency")
+                .register(meterRegistry);
+        this.retriesCounter = Counter.builder("cce.emitter.collector.retries")
+                .description("Collector retry attempts")
+                .register(meterRegistry);
+        this.rejectedCounter = Counter.builder("cce.emitter.events.rejected")
+                .description("Events rejected by Collector")
+                .tag("source", "collector")
+                .tag("reason", "client_error")
+                .register(meterRegistry);
     }
 
     /**
@@ -77,6 +96,10 @@ public class CollectorForwardingService {
 
         log.debug("Forwarding CloudEvent id={} to Collector at {}", event.getId(), eventsPath);
 
+        return collectorLatencyTimer.record(() -> doForward(event, eventsPath));
+    }
+
+    private CollectorResponse doForward(CloudEventDto event, String eventsPath) {
         try {
             CollectorResponse response = collectorRestClient.post()
                     .uri(eventsPath)
@@ -99,6 +122,7 @@ public class CollectorForwardingService {
             String body = ex.getResponseBodyAsString();
             log.warn("Collector rejected CloudEvent id={} — HTTP {} : {}",
                     event.getId(), statusCode, body);
+            rejectedCounter.increment();
             throw new CollectorClientException(
                     "Collector returned " + statusCode + ": " + body, statusCode, ex);
 
@@ -130,6 +154,7 @@ public class CollectorForwardingService {
     public CollectorResponse recover(CollectorForwardingException ex, CloudEventDto event) {
         log.error("All retry attempts exhausted for CloudEvent id={} — {}",
                 event != null ? event.getId() : "unknown", ex.getMessage());
+        retriesCounter.increment();
         throw new CollectorForwardingException(
                 "Collector forwarding failed after all retries: " + ex.getMessage(), ex);
     }

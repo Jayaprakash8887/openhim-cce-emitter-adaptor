@@ -2,6 +2,8 @@ package org.openphc.cce.emitter.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -58,7 +60,8 @@ class InboundEventServiceTest {
 
         service = new InboundEventService(
                 sourceAdaptorService, collectorForwardingService,
-                responseWrapper, collectorProperties, objectMapper);
+                responseWrapper, collectorProperties, objectMapper,
+                new SimpleMeterRegistry());
     }
 
     // ==================== Sample Data ====================

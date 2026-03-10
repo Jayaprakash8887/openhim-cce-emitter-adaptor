@@ -1,13 +1,13 @@
+# Integration test profile — WireMock replaces Collector, heartbeat disabled
 server:
-  port: 8082
-  servlet:
-    context-path: /
+  port: 0  # random port for tests
 
 spring:
   application:
     name: cce-emitter-adaptor
+  main:
+    allow-bean-definition-overriding: true
 
-# Mediator Identity & Endpoint
 mediator:
   urn: "urn:mediator:cce-emitter-adaptor"
   version: "1.0.0"
@@ -17,34 +17,30 @@ mediator:
     path: /inbound
     type: http
 
-# OpenHIM Core Configuration
 openhim:
   core:
     host: localhost
-    api-port: 8080
+    api-port: 18080
     username: root@openhim.org
     password: openhim-password
   heartbeat:
-    enabled: true
-    interval-seconds: 10
+    enabled: false
 
-# CCE Collector Configuration
 cce:
   collector:
-    url: http://localhost:5001
+    url: http://localhost:${wiremock.server.port:5055}
     events-path: /v1/events
-    timeout: 5000
+    timeout: 3000
     retry:
       max-attempts: 3
-      backoff-ms: 1000
+      backoff-ms: 100
     auth:
-      token: local-dev-token
+      token: test-token
   emitter:
     sources:
       ebuzima:
         client-id: ebuzima-emr-client
 
-# Actuator & Metrics
 management:
   endpoints:
     web:
@@ -52,7 +48,7 @@ management:
         include: health,info,prometheus,metrics
   endpoint:
     health:
-      show-details: when-authorized
+      show-details: always
       probes:
         enabled: true
     prometheus:
@@ -70,10 +66,7 @@ management:
     tags:
       application: cce-emitter-adaptor
 
-# Logging
 logging:
   level:
     org.openphc.cce: DEBUG
-    org.springframework.web: INFO
-  pattern:
-    console: "%d{ISO8601} [%thread] %-5level %logger{36} - %msg%n"
+    org.springframework.web: DEBUG

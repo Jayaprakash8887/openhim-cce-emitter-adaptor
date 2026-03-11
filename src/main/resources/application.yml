@@ -39,6 +39,10 @@ cce:
       backoff-ms: 1000
     auth:
       token: local-dev-token
+      keycloak-host:
+      realm:
+      client-id:
+      client-secret:
   emitter:
     sources:
       ebuzima:

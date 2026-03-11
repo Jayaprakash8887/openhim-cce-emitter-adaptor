@@ -79,6 +79,7 @@ sequenceDiagram
         EvtSvc->>Fwd: forward(cloudEvent)
         activate Fwd
         Note over Fwd: Timer: cce.emitter.collector.latency
+        Note over Fwd: CollectorTokenService: get Bearer token<br/>(OAuth2 Keycloak or static fallback)
         Fwd->>Col: POST /v1/events
         Col-->>Fwd: 202 Accepted
         Fwd-->>EvtSvc: CollectorResponse

@@ -54,7 +54,7 @@ class InboundEventServiceTest {
         CollectorProperties collectorProperties = new CollectorProperties(
                 "http://localhost:5001", "/v1/events", 5000,
                 new CollectorProperties.RetryProperties(3, 1000L),
-                new CollectorProperties.AuthProperties("test-token"));
+                new CollectorProperties.AuthProperties("test-token", null, null, null, null));
 
         OpenHimResponseWrapper responseWrapper = new OpenHimResponseWrapper(mediatorProperties, objectMapper);
 

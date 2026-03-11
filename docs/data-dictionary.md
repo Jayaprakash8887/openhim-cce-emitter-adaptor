@@ -121,7 +121,13 @@ Prefix: `cce.collector`
 | `cce.collector.timeout` | int | `5000` | HTTP connect + read timeout in ms |
 | `cce.collector.retry.max-attempts` | int | `3` | Maximum retry attempts for 5xx/timeout |
 | `cce.collector.retry.backoff-ms` | int | `1000` | Initial backoff delay in ms (doubles per retry) |
-| `cce.collector.auth.token` | String | — | Static Bearer token for authenticating with the CCE Gateway |
+| `cce.collector.auth.token` | String | — | Static Bearer token (fallback when Keycloak is not configured) |
+| `cce.collector.auth.keycloak-host` | String | — | Keycloak base URL (e.g., `https://keycloak.cce.mdtlabs.org`) |
+| `cce.collector.auth.realm` | String | — | Keycloak realm name (e.g., `cce`) |
+| `cce.collector.auth.client-id` | String | — | OAuth2 client ID for `client_credentials` grant |
+| `cce.collector.auth.client-secret` | String | — | OAuth2 client secret |
+
+> **Auth mode selection:** If all four Keycloak properties (`keycloak-host`, `realm`, `client-id`, `client-secret`) are set, OAuth2 `client_credentials` flow is used and tokens are cached/refreshed automatically. Otherwise, the static `token` value is used as a Bearer token.
 
 ### 3.4 Emitter Source Properties
 

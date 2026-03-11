@@ -190,6 +190,10 @@ cce:
       backoff-ms: 1000
     auth:
       token: local-dev-token
+      keycloak-host:
+      realm:
+      client-id:
+      client-secret:
   emitter:
     sources:
       ebuzima:
@@ -299,7 +303,11 @@ cce:
       max-attempts: ${CCE_COLLECTOR_RETRY_MAX_ATTEMPTS:3}
       backoff-ms: ${CCE_COLLECTOR_RETRY_BACKOFF_MS:1000}
     auth:
-      token: ${CCE_COLLECTOR_AUTH_TOKEN}
+      token: ${CCE_COLLECTOR_AUTH_TOKEN:}
+      keycloak-host: ${KEYCLOAK_HOST:}
+      realm: ${KEYCLOAK_REALM:cce}
+      client-id: ${KEYCLOAK_CLIENT_ID:}
+      client-secret: ${KEYCLOAK_CLIENT_SECRET:}
   emitter:
     sources:
       ebuzima:
@@ -439,7 +447,10 @@ docker run -p 8082:8082 \
   -e SPRING_PROFILES_ACTIVE=prod \
   -e OPENHIM_CORE_HOST=openhim-core \
   -e CCE_COLLECTOR_URL=http://collector:8081 \
-  -e CCE_COLLECTOR_AUTH_TOKEN=<token> \
+  -e KEYCLOAK_HOST=https://keycloak.cce.mdtlabs.org \
+  -e KEYCLOAK_REALM=cce \
+  -e KEYCLOAK_CLIENT_ID=<client-id> \
+  -e KEYCLOAK_CLIENT_SECRET=<client-secret> \
   cce-emitter-adaptor:latest
 ```
 

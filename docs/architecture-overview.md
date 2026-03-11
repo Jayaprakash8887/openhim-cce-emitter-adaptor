@@ -166,7 +166,8 @@ org.openphc.cce.emitter/
 │
 ├── service/                                       # Business logic
 │   ├── InboundEventService.java                   #   Orchestrates pipeline: adapt → forward → wrap (+ metrics + MDC)
-│   └── CollectorForwardingService.java            #   @Retryable: POST to Collector via RestClient (+ latency timer)
+│   ├── CollectorForwardingService.java            #   @Retryable: POST to Collector via RestClient (+ latency timer)
+│   └── CollectorTokenService.java                 #   OAuth2 client_credentials token management (Keycloak)
 │
 ├── model/                                         # DTOs
 │   ├── CloudEventDto.java                         #   CloudEvents v1.0 output DTO
@@ -290,7 +291,7 @@ Errors are handled by `GlobalExceptionHandler` (`@ControllerAdvice`):
 |---------|-----------|
 | **OpenHIM ↔ Mediator** | OpenHIM Core routes requests via existing eBUZIMA channel (secondary route); mediator trusts OpenHIM channel auth |
 | **Mediator → OpenHIM Core API** | Basic auth (`root@openhim.org` / password) for registration + heartbeat |
-| **Mediator → CCE Collector** | Static Bearer token configured in `cce.collector.auth.token`. Emitter authenticates independently with the CCE Gateway (separate trust boundary from inbound OpenHIM auth). |
+| **Mediator → CCE Collector** | OAuth2 client credentials via Keycloak (`CollectorTokenService`). Fetches and caches access tokens automatically. Falls back to static Bearer token (`cce.collector.auth.token`) when Keycloak is not configured. Emitter authenticates independently with the CCE Gateway (separate trust boundary from inbound OpenHIM auth). |
 | **TLS** | HTTPS connections configurable via Spring Boot `server.ssl.*` properties |
 
 ## 12. Deployment
@@ -302,7 +303,7 @@ Errors are handled by `GlobalExceptionHandler` (`@ControllerAdvice`):
 | **Liveness** | `/actuator/health/liveness` |
 | **Readiness** | `/actuator/health/readiness` |
 | **Metrics** | `/actuator/prometheus` |
-| **Key env vars** | `OPENHIM_CORE_HOST`, `CCE_COLLECTOR_URL`, `CCE_COLLECTOR_AUTH_TOKEN`, `SPRING_PROFILES_ACTIVE` |
+| **Key env vars** | `OPENHIM_CORE_HOST`, `CCE_COLLECTOR_URL`, `KEYCLOAK_HOST`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET`, `SPRING_PROFILES_ACTIVE` |
 
 ### Docker
 

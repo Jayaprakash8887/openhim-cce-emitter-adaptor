@@ -60,7 +60,7 @@ class CollectorForwardingServiceTest {
                 EVENTS_PATH,
                 5000,
                 new CollectorProperties.RetryProperties(3, 1000L),
-                new CollectorProperties.AuthProperties("test-token")
+                new CollectorProperties.AuthProperties("test-token", null, null, null, null)
         );
 
         service = new CollectorForwardingService(collectorRestClient, properties,

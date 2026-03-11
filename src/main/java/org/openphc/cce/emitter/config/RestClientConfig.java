@@ -11,12 +11,14 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
+import org.openphc.cce.emitter.service.CollectorTokenService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.ClientHttpRequestInterceptor;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
@@ -42,28 +44,34 @@ public class RestClientConfig {
      *   <li>Base URL from {@link CollectorProperties#url()}</li>
      *   <li>JSON content type default header</li>
      *   <li>Connect + read timeout from {@link CollectorProperties#timeout()}</li>
+     *   <li>Dynamic Bearer token via {@link CollectorTokenService} (OAuth2 or static fallback)</li>
      * </ul>
      *
-     * @param properties Collector configuration properties
+     * @param properties   Collector configuration properties
+     * @param tokenService token provider for Collector authentication
      * @return configured RestClient for Collector communication
      */
     @Bean
     @Qualifier("collectorRestClient")
-    public RestClient collectorRestClient(CollectorProperties properties) {
+    public RestClient collectorRestClient(CollectorProperties properties, CollectorTokenService tokenService) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Duration.ofMillis(properties.timeout()));
         requestFactory.setReadTimeout(Duration.ofMillis(properties.timeout()));
 
-        var builder = RestClient.builder()
+        ClientHttpRequestInterceptor authInterceptor = (request, body, execution) -> {
+            String token = tokenService.getToken();
+            if (token != null && !token.isBlank()) {
+                request.getHeaders().setBearerAuth(token);
+            }
+            return execution.execute(request, body);
+        };
+
+        return RestClient.builder()
                 .baseUrl(properties.url())
                 .defaultHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE)
-                .requestFactory(requestFactory);
-
-        if (properties.auth() != null && properties.auth().token() != null) {
-            builder.defaultHeader("Authorization", "Bearer " + properties.auth().token());
-        }
-
-        return builder.build();
+                .requestFactory(requestFactory)
+                .requestInterceptor(authInterceptor)
+                .build();
     }
 
     /**

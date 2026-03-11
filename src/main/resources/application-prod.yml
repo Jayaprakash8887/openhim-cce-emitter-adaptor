@@ -30,7 +30,11 @@ cce:
       max-attempts: ${CCE_COLLECTOR_RETRY_MAX_ATTEMPTS:3}
       backoff-ms: ${CCE_COLLECTOR_RETRY_BACKOFF_MS:1000}
     auth:
-      token: ${CCE_COLLECTOR_AUTH_TOKEN}
+      token: ${CCE_COLLECTOR_AUTH_TOKEN:}
+      keycloak-host: ${KEYCLOAK_HOST:}
+      realm: ${KEYCLOAK_REALM:cce}
+      client-id: ${KEYCLOAK_CLIENT_ID:}
+      client-secret: ${KEYCLOAK_CLIENT_SECRET:}
   emitter:
     sources:
       ebuzima:

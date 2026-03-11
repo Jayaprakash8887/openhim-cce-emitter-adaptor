@@ -19,6 +19,7 @@ First production release of the **CCE Emitter Adaptor** — an OpenHIM mediator 
 | **Source Routing** | Config-driven source resolution via `X-OpenHIM-ClientID` or `X-Source-System` headers |
 | **CloudEvents v1.0** | Wraps FHIR resources in spec-compliant CloudEvents with CCE extensions (`facilityid`, `sourceeventid`, `correlationid`) |
 | **Collector Forwarding** | POSTs CloudEvents to CCE Collector with retry + exponential backoff (configurable max attempts) |
+| **OAuth2 Authentication** | Keycloak `client_credentials` token management for Collector auth (`CollectorTokenService`). Automatic caching and refresh. Falls back to static Bearer token for local dev. |
 | **OpenHIM Lifecycle** | Automatic registration on startup, periodic heartbeat, `application/json+openhim` response envelope |
 | **Observability** | Micrometer/Prometheus metrics (6 custom metrics), structured MDC logging (dev: human-readable, prod: JSON) |
 | **Health Probes** | Kubernetes-compatible liveness (`/actuator/health/liveness`) and readiness (`/actuator/health/readiness`) |
@@ -28,7 +29,6 @@ First production release of the **CCE Emitter Adaptor** — an OpenHIM mediator 
 | Limitation | Detail |
 |-----------|--------|
 | **Bundle resources** | FHIR Bundle resources are silently ignored — only individual resources are processed |
-| **Static Bearer token** | Collector authentication uses a static token (no OAuth client credentials flow) |
 | **No dynamic config** | OpenHIM heartbeat-based dynamic configuration is not consumed |
 | **Single source** | Only eBUZIMA EMR is configured (additional sources require config changes only — no code changes) |
 
@@ -69,7 +69,9 @@ docker run -d \
   -e OPENHIM_USERNAME=<openhim-username> \
   -e OPENHIM_PASSWORD=<openhim-password> \
   -e CCE_COLLECTOR_URL=<collector-base-url> \
-  -e CCE_COLLECTOR_AUTH_TOKEN=<bearer-token> \
+  -e KEYCLOAK_HOST=<keycloak-base-url> \
+  -e KEYCLOAK_CLIENT_ID=<client-id> \
+  -e KEYCLOAK_CLIENT_SECRET=<client-secret> \
   -e EBUZIMA_CLIENT_ID=<ebuzima-client-id> \
   cce-emitter-adaptor:1.0.0
 ```
@@ -84,7 +86,9 @@ docker run -d \
 | `OPENHIM_USERNAME` | OpenHIM Core API username |
 | `OPENHIM_PASSWORD` | OpenHIM Core API password |
 | `CCE_COLLECTOR_URL` | CCE Collector base URL (via Gateway) |
-| `CCE_COLLECTOR_AUTH_TOKEN` | Static Bearer token for Collector authentication |
+| `KEYCLOAK_HOST` | Keycloak base URL (e.g., `https://keycloak.cce.mdtlabs.org`). Required for OAuth2. |
+| `KEYCLOAK_CLIENT_ID` | OAuth2 client ID for Keycloak `client_credentials` grant |
+| `KEYCLOAK_CLIENT_SECRET` | OAuth2 client secret |
 | `EBUZIMA_CLIENT_ID` | OpenHIM client ID for eBUZIMA EMR matching |
 
 ### Optional (have sensible defaults)
@@ -95,6 +99,8 @@ docker run -d \
 | `SERVER_PORT` | `8082` | HTTP listen port |
 | `OPENHIM_CORE_API_PORT` | `8080` | OpenHIM Core API port |
 | `OPENHIM_HEARTBEAT_INTERVAL` | `10` | Heartbeat interval in seconds |
+| `CCE_COLLECTOR_AUTH_TOKEN` | — | Static Bearer token (fallback when Keycloak is not configured) |
+| `KEYCLOAK_REALM` | `cce` | Keycloak realm name |
 | `CCE_COLLECTOR_EVENTS_PATH` | `/v1/events` | Collector endpoint path |
 | `CCE_COLLECTOR_TIMEOUT` | `5000` | HTTP timeout in ms |
 | `CCE_COLLECTOR_RETRY_MAX_ATTEMPTS` | `3` | Max retry attempts on 5xx/timeout |

@@ -279,7 +279,7 @@ Content-Type: application/json
 
 ```
 POST <collector-url>/v1/events
-Authorization: Bearer <cce.collector.auth.token>
+Authorization: Bearer <access-token>
 Content-Type: application/json
 
 {
@@ -291,7 +291,7 @@ Content-Type: application/json
 }
 ```
 
-> **Note:** The adaptor authenticates to the CCE Collector (via CCE Gateway) using a static Bearer token configured in `cce.collector.auth.token`. This is separate from the inbound OpenHIM channel auth.
+> **Authentication:** The adaptor authenticates to the CCE Collector (via CCE Gateway) using an OAuth2 Bearer token obtained from Keycloak via the `client_credentials` grant. Tokens are cached and refreshed automatically by `CollectorTokenService`. If Keycloak is not configured, falls back to a static Bearer token from `cce.collector.auth.token`. This is separate from the inbound OpenHIM channel auth.
 
 **Success:** `202 Accepted`
 **Duplicate:** `200 OK`

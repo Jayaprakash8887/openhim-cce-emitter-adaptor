@@ -490,7 +490,50 @@ class SourceAdaptorServiceTest {
         }
 
         @Test
-        void missingCorrelationId_generatesUuid() {
+        void openhimTransactionId_preferredOverCorrelationId() {
+            InboundRequest request = InboundRequest.from(
+                    encounterJson,
+                    Map.of(
+                            "X-OpenHIM-ClientID", CLIENT_ID,
+                            "X-OpenHIM-TransactionID", "65abc123def456789012abcd",
+                            "X-Correlation-Id", "corr-should-be-ignored"),
+                    "/inbound");
+
+            SourceMetadata metadata = service.buildSourceMetadata(request, SOURCE_KEY);
+
+            assertThat(metadata.correlationId()).isEqualTo("65abc123def456789012abcd");
+        }
+
+        @Test
+        void openhimTransactionId_usedWhenCorrelationIdAbsent() {
+            InboundRequest request = InboundRequest.from(
+                    encounterJson,
+                    Map.of(
+                            "X-OpenHIM-ClientID", CLIENT_ID,
+                            "X-OpenHIM-TransactionID", "65abc123def456789012abcd"),
+                    "/inbound");
+
+            SourceMetadata metadata = service.buildSourceMetadata(request, SOURCE_KEY);
+
+            assertThat(metadata.correlationId()).isEqualTo("65abc123def456789012abcd");
+        }
+
+        @Test
+        void correlationId_usedWhenTransactionIdAbsent() {
+            InboundRequest request = InboundRequest.from(
+                    encounterJson,
+                    Map.of(
+                            "X-OpenHIM-ClientID", CLIENT_ID,
+                            "X-Correlation-Id", "corr-fallback-001"),
+                    "/inbound");
+
+            SourceMetadata metadata = service.buildSourceMetadata(request, SOURCE_KEY);
+
+            assertThat(metadata.correlationId()).isEqualTo("corr-fallback-001");
+        }
+
+        @Test
+        void missingBothHeaders_generatesUuid() {
             InboundRequest request = InboundRequest.from(
                     encounterJson,
                     Map.of("X-OpenHIM-ClientID", CLIENT_ID),

@@ -34,7 +34,8 @@ POST /inbound
 | `X-Source-System` | No | Source system identifier (e.g., `ebuzima`). Fallback when `X-OpenHIM-ClientID` is absent. |
 | `X-Facility-Id` | No | Facility FOSA ID |
 | `X-Source-Event-Id` | No | Source system's original event ID |
-| `X-Correlation-Id` | No | Trace correlation ID. If present, used as-is; otherwise adaptor generates one. |
+| `X-OpenHIM-TransactionID` | No | OpenHIM transaction ID. **Highest priority** source for CloudEvent `correlationid` — preferred over `X-Correlation-Id`. Automatically set by OpenHIM Core on every routed request. |
+| `X-Correlation-Id` | No | Trace correlation ID. Used as `correlationid` if `X-OpenHIM-TransactionID` is absent. If both are absent, adaptor generates a UUID. |
 
 > **Note:** This header list is derived from the CCE solution design document and local OpenHIM testing. The actual headers available may change based on the RHIE deployment configuration.
 

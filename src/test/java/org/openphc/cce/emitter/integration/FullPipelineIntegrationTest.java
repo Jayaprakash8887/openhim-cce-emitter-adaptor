@@ -282,6 +282,25 @@ class FullPipelineIntegrationTest {
             collectorMock.verify(1, postRequestedFor(urlEqualTo("/v1/events"))
                     .withRequestBody(matchingJsonPath("$.correlationid")));
         }
+
+        @Test
+        @DisplayName("should use X-OpenHIM-TransactionID as correlationid when present")
+        void usesOpenHimTransactionIdAsCorrelationId() throws Exception {
+            stubCollectorAccepted();
+
+            String encounterJson = loadFixture("fhir/encounter-visit.json");
+
+            mockMvc.perform(post("/inbound")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .header("X-OpenHIM-ClientID", "ebuzima-emr-client")
+                            .header("X-OpenHIM-TransactionID", "69b28b13c6263c20cf60fbdb")
+                            .header("X-Correlation-Id", "corr-should-be-ignored")
+                            .content(encounterJson))
+                    .andExpect(status().isAccepted());
+
+            collectorMock.verify(1, postRequestedFor(urlEqualTo("/v1/events"))
+                    .withRequestBody(matchingJsonPath("$.correlationid", equalTo("69b28b13c6263c20cf60fbdb"))));
+        }
     }
 
     // ==================== Empty / Missing Body ====================

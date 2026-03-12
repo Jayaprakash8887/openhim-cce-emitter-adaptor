@@ -1,0 +1,433 @@
+{
+  "info": {
+    "name": "CCE Emitter Adaptor — Dev Environment",
+    "description": "Test collection for the CCE Emitter Adaptor via OpenHIM Core.\n\n## Authentication\n\nRequests to OpenHIM Core use **HTTP Basic Auth** with the eBUZIMA client credentials.\n\n## Flow\n\n`Postman → OpenHIM Core (port 5000) → [Primary Route] + [Secondary Route: Emitter Adaptor] → CCE Collector`\n\n## Variables\n\n- `openhim_host` — OpenHIM Core HTTP endpoint\n- `emitter_host` — Direct emitter access (bypasses OpenHIM)\n- `ebuzima_client_id` / `ebuzima_client_password` — eBUZIMA client credentials for OpenHIM channel auth",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "basic",
+    "basic": [
+      { "key": "username", "value": "{{ebuzima_client_id}}", "type": "string" },
+      { "key": "password", "value": "{{ebuzima_client_password}}", "type": "string" }
+    ]
+  },
+  "variable": [
+    { "key": "openhim_host", "value": "https://openhim.cce.mdtlabs.org:5000", "type": "string" },
+    { "key": "emitter_host", "value": "http://openhim.cce.mdtlabs.org:8082", "type": "string" },
+    { "key": "ebuzima_client_id", "value": "ebuzima-emr-client", "type": "string" },
+    { "key": "ebuzima_client_password", "value": "CHANGE_ME", "type": "string" },
+    { "key": "patient_upid", "value": "260225-0002-5501", "type": "string" },
+    { "key": "facility_id", "value": "0002", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "1. Via OpenHIM Channel",
+      "description": "Requests sent through OpenHIM Core (port 5000) to the eBUZIMA EMR channel (`^/ebuzima/.*$`). OpenHIM routes to the primary route and the CCE Emitter Adaptor as a secondary route. Requires eBUZIMA client Basic Auth.",
+      "item": [
+        {
+          "name": "1.1 Encounter — Clinical Visit",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/fhir+json" },
+              { "key": "X-Facility-Id", "value": "{{facility_id}}" },
+              { "key": "X-Source-Event-Id", "value": "enc-visit-{{$timestamp}}" },
+              { "key": "X-Correlation-Id", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resourceType\": \"Encounter\",\n  \"id\": \"enc-uuid-visit-kicukiro-001\",\n  \"status\": \"in-progress\",\n  \"class\": {\n    \"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActCode\",\n    \"code\": \"AMB\",\n    \"display\": \"ambulatory\"\n  },\n  \"type\": [\n    {\n      \"coding\": [\n        {\n          \"system\": \"http://openphc.org/encounter-types\",\n          \"code\": \"VISIT_ENCOUNTER\",\n          \"display\": \"Visit Encounter\"\n        }\n      ]\n    }\n  ],\n  \"subject\": {\n    \"reference\": \"Patient/{{patient_upid}}\",\n    \"display\": \"Marie-Claire KAYITESI\"\n  },\n  \"period\": {\n    \"start\": \"2026-03-12T08:00:00Z\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{openhim_host}}/ebuzima/fhir/Encounter",
+              "host": ["{{openhim_host}}"],
+              "path": ["ebuzima", "fhir", "Encounter"]
+            },
+            "description": "Sends an Encounter (ambulatory clinical visit) through the eBUZIMA channel. The emitter wraps it in a CloudEvent with `type: Encounter` and forwards to the Collector."
+          }
+        },
+        {
+          "name": "1.2 Observation — Lab Result (Hemoglobin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/fhir+json" },
+              { "key": "X-Facility-Id", "value": "{{facility_id}}" },
+              { "key": "X-Source-Event-Id", "value": "obs-lab-{{$timestamp}}" },
+              { "key": "X-Correlation-Id", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resourceType\": \"Observation\",\n  \"id\": \"obs-lab-hb-001\",\n  \"status\": \"final\",\n  \"category\": [\n    {\n      \"coding\": [\n        {\n          \"system\": \"http://terminology.hl7.org/CodeSystem/observation-category\",\n          \"code\": \"laboratory\",\n          \"display\": \"Laboratory\"\n        }\n      ]\n    }\n  ],\n  \"code\": {\n    \"coding\": [\n      {\n        \"system\": \"http://loinc.org\",\n        \"code\": \"718-7\",\n        \"display\": \"Hemoglobin [Mass/volume] in Blood\"\n      }\n    ]\n  },\n  \"subject\": {\n    \"reference\": \"Patient/{{patient_upid}}\",\n    \"display\": \"Marie-Claire KAYITESI\"\n  },\n  \"effectiveDateTime\": \"2026-03-12T09:30:00Z\",\n  \"valueQuantity\": {\n    \"value\": 12.5,\n    \"unit\": \"g/dL\",\n    \"system\": \"http://unitsofmeasure.org\",\n    \"code\": \"g/dL\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{openhim_host}}/ebuzima/fhir/Observation",
+              "host": ["{{openhim_host}}"],
+              "path": ["ebuzima", "fhir", "Observation"]
+            },
+            "description": "Sends a lab Observation (Hemoglobin result) through the eBUZIMA channel."
+          }
+        },
+        {
+          "name": "1.3 Condition — Diagnosis (Hypertension)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/fhir+json" },
+              { "key": "X-Facility-Id", "value": "{{facility_id}}" },
+              { "key": "X-Source-Event-Id", "value": "cond-{{$timestamp}}" },
+              { "key": "X-Correlation-Id", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resourceType\": \"Condition\",\n  \"id\": \"cond-hypertension-001\",\n  \"clinicalStatus\": {\n    \"coding\": [\n      {\n        \"system\": \"http://terminology.hl7.org/CodeSystem/condition-clinical\",\n        \"code\": \"active\",\n        \"display\": \"Active\"\n      }\n    ]\n  },\n  \"verificationStatus\": {\n    \"coding\": [\n      {\n        \"system\": \"http://terminology.hl7.org/CodeSystem/condition-ver-status\",\n        \"code\": \"confirmed\",\n        \"display\": \"Confirmed\"\n      }\n    ]\n  },\n  \"category\": [\n    {\n      \"coding\": [\n        {\n          \"system\": \"http://terminology.hl7.org/CodeSystem/condition-category\",\n          \"code\": \"encounter-diagnosis\",\n          \"display\": \"Encounter Diagnosis\"\n        }\n      ]\n    }\n  ],\n  \"code\": {\n    \"coding\": [\n      {\n        \"system\": \"http://hl7.org/fhir/sid/icd-10\",\n        \"code\": \"I10\",\n        \"display\": \"Essential (primary) hypertension\"\n      }\n    ]\n  },\n  \"subject\": {\n    \"reference\": \"Patient/{{patient_upid}}\",\n    \"display\": \"Marie-Claire KAYITESI\"\n  },\n  \"onsetDateTime\": \"2026-03-12T08:30:00Z\",\n  \"recordedDate\": \"2026-03-12T08:30:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{openhim_host}}/ebuzima/fhir/Condition",
+              "host": ["{{openhim_host}}"],
+              "path": ["ebuzima", "fhir", "Condition"]
+            },
+            "description": "Sends a Condition (hypertension diagnosis) through the eBUZIMA channel."
+          }
+        },
+        {
+          "name": "1.4 MedicationRequest — Prescription",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/fhir+json" },
+              { "key": "X-Facility-Id", "value": "{{facility_id}}" },
+              { "key": "X-Source-Event-Id", "value": "medrq-{{$timestamp}}" },
+              { "key": "X-Correlation-Id", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resourceType\": \"MedicationRequest\",\n  \"id\": \"medrq-amlodipine-001\",\n  \"status\": \"active\",\n  \"intent\": \"order\",\n  \"medicationCodeableConcept\": {\n    \"coding\": [\n      {\n        \"system\": \"http://www.nlm.nih.gov/research/umls/rxnorm\",\n        \"code\": \"329528\",\n        \"display\": \"Amlodipine 5 MG Oral Tablet\"\n      }\n    ]\n  },\n  \"subject\": {\n    \"reference\": \"Patient/{{patient_upid}}\",\n    \"display\": \"Marie-Claire KAYITESI\"\n  },\n  \"authoredOn\": \"2026-03-12T09:00:00Z\",\n  \"dosageInstruction\": [\n    {\n      \"text\": \"Take 1 tablet daily\",\n      \"timing\": {\n        \"repeat\": {\n          \"frequency\": 1,\n          \"period\": 1,\n          \"periodUnit\": \"d\"\n        }\n      },\n      \"doseAndRate\": [\n        {\n          \"doseQuantity\": {\n            \"value\": 5,\n            \"unit\": \"mg\",\n            \"system\": \"http://unitsofmeasure.org\",\n            \"code\": \"mg\"\n          }\n        }\n      ]\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{openhim_host}}/ebuzima/fhir/MedicationRequest",
+              "host": ["{{openhim_host}}"],
+              "path": ["ebuzima", "fhir", "MedicationRequest"]
+            },
+            "description": "Sends a MedicationRequest (Amlodipine prescription for hypertension) through the eBUZIMA channel."
+          }
+        },
+        {
+          "name": "1.5 Immunization — Vaccination Event",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/fhir+json" },
+              { "key": "X-Facility-Id", "value": "{{facility_id}}" },
+              { "key": "X-Source-Event-Id", "value": "imm-{{$timestamp}}" },
+              { "key": "X-Correlation-Id", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resourceType\": \"Immunization\",\n  \"id\": \"imm-bcg-001\",\n  \"status\": \"completed\",\n  \"vaccineCode\": {\n    \"coding\": [\n      {\n        \"system\": \"http://hl7.org/fhir/sid/cvx\",\n        \"code\": \"19\",\n        \"display\": \"BCG\"\n      }\n    ]\n  },\n  \"patient\": {\n    \"reference\": \"Patient/{{patient_upid}}\",\n    \"display\": \"Marie-Claire KAYITESI\"\n  },\n  \"occurrenceDateTime\": \"2026-03-12T10:00:00Z\",\n  \"lotNumber\": \"BCG-LOT-2026-001\",\n  \"site\": {\n    \"coding\": [\n      {\n        \"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActSite\",\n        \"code\": \"LA\",\n        \"display\": \"Left Arm\"\n      }\n    ]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{openhim_host}}/ebuzima/fhir/Immunization",
+              "host": ["{{openhim_host}}"],
+              "path": ["ebuzima", "fhir", "Immunization"]
+            },
+            "description": "Sends an Immunization (BCG vaccination) through the eBUZIMA channel."
+          }
+        },
+        {
+          "name": "1.6 ServiceRequest — Lab Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/fhir+json" },
+              { "key": "X-Facility-Id", "value": "{{facility_id}}" },
+              { "key": "X-Source-Event-Id", "value": "srq-{{$timestamp}}" },
+              { "key": "X-Correlation-Id", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resourceType\": \"ServiceRequest\",\n  \"id\": \"srq-cbc-001\",\n  \"status\": \"active\",\n  \"intent\": \"order\",\n  \"category\": [\n    {\n      \"coding\": [\n        {\n          \"system\": \"http://snomed.info/sct\",\n          \"code\": \"108252007\",\n          \"display\": \"Laboratory procedure\"\n        }\n      ]\n    }\n  ],\n  \"code\": {\n    \"coding\": [\n      {\n        \"system\": \"http://loinc.org\",\n        \"code\": \"58410-2\",\n        \"display\": \"Complete blood count (CBC)\"\n      }\n    ]\n  },\n  \"subject\": {\n    \"reference\": \"Patient/{{patient_upid}}\",\n    \"display\": \"Marie-Claire KAYITESI\"\n  },\n  \"authoredOn\": \"2026-03-12T08:15:00Z\",\n  \"priority\": \"routine\"\n}"
+            },
+            "url": {
+              "raw": "{{openhim_host}}/ebuzima/fhir/ServiceRequest",
+              "host": ["{{openhim_host}}"],
+              "path": ["ebuzima", "fhir", "ServiceRequest"]
+            },
+            "description": "Sends a ServiceRequest (CBC lab order) through the eBUZIMA channel."
+          }
+        },
+        {
+          "name": "1.7 Bundle — Should Be Ignored",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/fhir+json" },
+              { "key": "X-Facility-Id", "value": "{{facility_id}}" },
+              { "key": "X-Correlation-Id", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resourceType\": \"Bundle\",\n  \"id\": \"bundle-test-001\",\n  \"type\": \"transaction\",\n  \"entry\": [\n    {\n      \"resource\": {\n        \"resourceType\": \"Encounter\",\n        \"id\": \"enc-bundle-001\",\n        \"status\": \"in-progress\",\n        \"class\": {\n          \"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActCode\",\n          \"code\": \"AMB\"\n        },\n        \"subject\": {\n          \"reference\": \"Patient/{{patient_upid}}\"\n        }\n      },\n      \"request\": {\n        \"method\": \"POST\",\n        \"url\": \"Encounter\"\n      }\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{openhim_host}}/ebuzima/fhir",
+              "host": ["{{openhim_host}}"],
+              "path": ["ebuzima", "fhir"]
+            },
+            "description": "Sends a FHIR Bundle. The emitter should silently ignore this (Bundles are out of scope for v1.0). Expects 202 Accepted with no CloudEvent forwarded to Collector."
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Direct to Emitter (Bypass OpenHIM)",
+      "description": "Requests sent directly to the emitter on port 8082, bypassing OpenHIM. Useful for testing the emitter in isolation. Requires `X-OpenHIM-ClientID` or `X-Source-System` header for source routing.",
+      "item": [
+        {
+          "name": "2.1 Encounter — via X-OpenHIM-ClientID",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/fhir+json" },
+              { "key": "X-OpenHIM-ClientID", "value": "{{ebuzima_client_id}}" },
+              { "key": "X-Facility-Id", "value": "{{facility_id}}" },
+              { "key": "X-Source-Event-Id", "value": "enc-direct-{{$timestamp}}" },
+              { "key": "X-Correlation-Id", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resourceType\": \"Encounter\",\n  \"id\": \"enc-direct-test-001\",\n  \"status\": \"finished\",\n  \"class\": {\n    \"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActCode\",\n    \"code\": \"AMB\",\n    \"display\": \"ambulatory\"\n  },\n  \"type\": [\n    {\n      \"coding\": [\n        {\n          \"system\": \"http://openphc.org/encounter-types\",\n          \"code\": \"VISIT_ENCOUNTER\",\n          \"display\": \"Visit Encounter\"\n        }\n      ]\n    }\n  ],\n  \"subject\": {\n    \"reference\": \"Patient/{{patient_upid}}\",\n    \"display\": \"Marie-Claire KAYITESI\"\n  },\n  \"period\": {\n    \"start\": \"2026-03-12T07:00:00Z\",\n    \"end\": \"2026-03-12T07:45:00Z\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{emitter_host}}/inbound",
+              "host": ["{{emitter_host}}"],
+              "path": ["inbound"]
+            },
+            "description": "Sends an Encounter directly to the emitter using `X-OpenHIM-ClientID` header for source matching. No OpenHIM auth needed."
+          }
+        },
+        {
+          "name": "2.2 Observation — via X-Source-System",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/fhir+json" },
+              { "key": "X-Source-System", "value": "ebuzima" },
+              { "key": "X-Facility-Id", "value": "{{facility_id}}" },
+              { "key": "X-Source-Event-Id", "value": "obs-direct-{{$timestamp}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resourceType\": \"Observation\",\n  \"id\": \"obs-vitals-bp-001\",\n  \"status\": \"final\",\n  \"category\": [\n    {\n      \"coding\": [\n        {\n          \"system\": \"http://terminology.hl7.org/CodeSystem/observation-category\",\n          \"code\": \"vital-signs\",\n          \"display\": \"Vital Signs\"\n        }\n      ]\n    }\n  ],\n  \"code\": {\n    \"coding\": [\n      {\n        \"system\": \"http://loinc.org\",\n        \"code\": \"85354-9\",\n        \"display\": \"Blood pressure panel\"\n      }\n    ]\n  },\n  \"subject\": {\n    \"reference\": \"Patient/{{patient_upid}}\",\n    \"display\": \"Marie-Claire KAYITESI\"\n  },\n  \"effectiveDateTime\": \"2026-03-12T08:05:00Z\",\n  \"component\": [\n    {\n      \"code\": {\n        \"coding\": [\n          {\n            \"system\": \"http://loinc.org\",\n            \"code\": \"8480-6\",\n            \"display\": \"Systolic blood pressure\"\n          }\n        ]\n      },\n      \"valueQuantity\": {\n        \"value\": 145,\n        \"unit\": \"mmHg\",\n        \"system\": \"http://unitsofmeasure.org\",\n        \"code\": \"mm[Hg]\"\n      }\n    },\n    {\n      \"code\": {\n        \"coding\": [\n          {\n            \"system\": \"http://loinc.org\",\n            \"code\": \"8462-4\",\n            \"display\": \"Diastolic blood pressure\"\n          }\n        ]\n      },\n      \"valueQuantity\": {\n        \"value\": 92,\n        \"unit\": \"mmHg\",\n        \"system\": \"http://unitsofmeasure.org\",\n        \"code\": \"mm[Hg]\"\n      }\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{emitter_host}}/inbound",
+              "host": ["{{emitter_host}}"],
+              "path": ["inbound"]
+            },
+            "description": "Sends a blood pressure Observation directly to the emitter using `X-Source-System` header (fallback source matching). Also tests that the emitter generates a `X-Correlation-Id` when the header is absent."
+          }
+        },
+        {
+          "name": "2.3 No Source Headers — Should Be Ignored",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/fhir+json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resourceType\": \"Encounter\",\n  \"id\": \"enc-no-source-001\",\n  \"status\": \"in-progress\",\n  \"class\": {\n    \"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActCode\",\n    \"code\": \"AMB\"\n  },\n  \"subject\": {\n    \"reference\": \"Patient/{{patient_upid}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{emitter_host}}/inbound",
+              "host": ["{{emitter_host}}"],
+              "path": ["inbound"]
+            },
+            "description": "Sends a valid FHIR resource without any source identification headers. The emitter should silently ignore it (no source matched) and return 202 with no CloudEvent forwarded."
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Health & Metrics",
+      "description": "Actuator endpoints for health checks, readiness/liveness probes, and Prometheus metrics scraping.",
+      "item": [
+        {
+          "name": "3.1 Health Check",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{emitter_host}}/actuator/health",
+              "host": ["{{emitter_host}}"],
+              "path": ["actuator", "health"]
+            },
+            "description": "Overall health status."
+          }
+        },
+        {
+          "name": "3.2 Liveness Probe",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{emitter_host}}/actuator/health/liveness",
+              "host": ["{{emitter_host}}"],
+              "path": ["actuator", "health", "liveness"]
+            },
+            "description": "Kubernetes/Docker liveness probe. Returns 200 if the application is alive."
+          }
+        },
+        {
+          "name": "3.3 Readiness Probe",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{emitter_host}}/actuator/health/readiness",
+              "host": ["{{emitter_host}}"],
+              "path": ["actuator", "health", "readiness"]
+            },
+            "description": "Kubernetes/Docker readiness probe. Returns 200 if the application is ready to serve traffic."
+          }
+        },
+        {
+          "name": "3.4 Prometheus Metrics",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{emitter_host}}/actuator/prometheus",
+              "host": ["{{emitter_host}}"],
+              "path": ["actuator", "prometheus"]
+            },
+            "description": "Prometheus metrics scrape endpoint. Look for `cce_emitter_*` metrics (events_received, events_forwarded, events_rejected, collector_latency, collector_retries)."
+          }
+        },
+        {
+          "name": "3.5 Application Info",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{emitter_host}}/actuator/info",
+              "host": ["{{emitter_host}}"],
+              "path": ["actuator", "info"]
+            },
+            "description": "Application info endpoint."
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. OpenHIM Admin API",
+      "description": "OpenHIM Core administrative API calls (port 8080, HTTPS). Uses admin Basic Auth. Useful for verifying mediator registration, channel config, and transaction logs.",
+      "item": [
+        {
+          "name": "4.1 List Mediators",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "root@openhim.org", "type": "string" },
+                { "key": "password", "value": "cceadmin@123", "type": "string" }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "https://openhim.cce.mdtlabs.org:8080/mediators",
+              "protocol": "https",
+              "host": ["openhim.cce.mdtlabs.org"],
+              "port": "8080",
+              "path": ["mediators"]
+            },
+            "description": "Lists all registered mediators. Verify the CCE Emitter Adaptor (urn:mediator:cce-emitter-adaptor) is registered."
+          }
+        },
+        {
+          "name": "4.2 List Channels",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "root@openhim.org", "type": "string" },
+                { "key": "password", "value": "cceadmin@123", "type": "string" }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "https://openhim.cce.mdtlabs.org:8080/channels",
+              "protocol": "https",
+              "host": ["openhim.cce.mdtlabs.org"],
+              "port": "8080",
+              "path": ["channels"]
+            },
+            "description": "Lists all channels. Verify eBUZIMA EMR Channel with secondary route to emitter."
+          }
+        },
+        {
+          "name": "4.3 Recent Transactions",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "root@openhim.org", "type": "string" },
+                { "key": "password", "value": "cceadmin@123", "type": "string" }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "https://openhim.cce.mdtlabs.org:8080/transactions?filterLimit=10&filterPage=0",
+              "protocol": "https",
+              "host": ["openhim.cce.mdtlabs.org"],
+              "port": "8080",
+              "path": ["transactions"],
+              "query": [
+                { "key": "filterLimit", "value": "10" },
+                { "key": "filterPage", "value": "0" }
+              ]
+            },
+            "description": "Fetches the 10 most recent transactions. Check status and orchestrations for emitter requests."
+          }
+        },
+        {
+          "name": "4.4 List Clients",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "root@openhim.org", "type": "string" },
+                { "key": "password", "value": "cceadmin@123", "type": "string" }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "https://openhim.cce.mdtlabs.org:8080/clients",
+              "protocol": "https",
+              "host": ["openhim.cce.mdtlabs.org"],
+              "port": "8080",
+              "path": ["clients"]
+            },
+            "description": "Lists all OpenHIM clients. Verify the 'ebuzima' client with clientID 'ebuzima-emr-client' exists."
+          }
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Disable SSL certificate verification for OpenHIM self-signed certs.",
+          "// In Postman settings, also turn off 'SSL certificate verification'."
+        ]
+      }
+    }
+  ]
+}

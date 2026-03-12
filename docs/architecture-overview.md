@@ -348,7 +348,7 @@ Registered in `InboundEventService` and `CollectorForwardingService` via constru
 
 | MDC Key | Source | Description |
 |---------|--------|-------------|
-| `correlationId` | `X-Correlation-Id` header or generated | Trace correlation ID |
+| `correlationId` | `X-OpenHIM-TransactionID` or `X-Correlation-Id` header, or generated | Trace correlation ID |
 | `source` | Resolved source key | Source system identifier (e.g., `"ebuzima"`) |
 | `eventType` | FHIR `resourceType` | CloudEvents `type` field |
 | `subject` | Patient UPID | Patient identifier for the event |

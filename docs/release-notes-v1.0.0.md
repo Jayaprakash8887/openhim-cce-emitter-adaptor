@@ -18,6 +18,7 @@ First production release of the **CCE Emitter Adaptor** — an OpenHIM mediator 
 | **FHIR R4 Ingestion** | Receives individual FHIR resources (Encounter, Observation, Condition, etc.) via `POST /inbound` |
 | **Source Routing** | Config-driven source resolution via `X-OpenHIM-ClientID` or `X-Source-System` headers |
 | **CloudEvents v1.0** | Wraps FHIR resources in spec-compliant CloudEvents with CCE extensions (`facilityid`, `sourceeventid`, `correlationid`) |
+| **Correlation ID from OpenHIM** | Uses `X-OpenHIM-TransactionID` header (set automatically by OpenHIM Core) as the preferred `correlationid`. Falls back to `X-Correlation-Id`, then adaptor-generated UUID. |
 | **Collector Forwarding** | POSTs CloudEvents to CCE Collector with retry + exponential backoff (configurable max attempts) |
 | **OAuth2 Authentication** | Keycloak `client_credentials` token management for Collector auth (`CollectorTokenService`). Automatic caching and refresh. Falls back to static Bearer token for local dev. |
 | **OpenHIM Lifecycle** | Automatic registration on startup, periodic heartbeat, `application/json+openhim` response envelope |

@@ -46,6 +46,7 @@ public class SourceAdaptorService {
     private static final Logger log = LoggerFactory.getLogger(SourceAdaptorService.class);
 
     private static final String HEADER_OPENHIM_CLIENT_ID = "x-openhim-clientid";
+    private static final String HEADER_OPENHIM_TRANSACTION_ID = "x-openhim-transactionid";
     private static final String HEADER_SOURCE_SYSTEM = "x-source-system";
     private static final String HEADER_FACILITY_ID = "x-facility-id";
     private static final String HEADER_SOURCE_EVENT_ID = "x-source-event-id";
@@ -171,13 +172,18 @@ public class SourceAdaptorService {
     /**
      * Builds {@link SourceMetadata} from inbound request headers.
      *
-     * <p>If the {@code X-Correlation-Id} header is absent, a UUID is generated
-     * by the adaptor for downstream tracing.
+     * <p>Correlation ID priority chain:
+     * <ol>
+     *   <li>{@code X-OpenHIM-TransactionID} — OpenHIM Core's transaction ID (preferred — links to OpenHIM transaction log)</li>
+     *   <li>{@code X-Correlation-Id} — explicit correlation header from the source system</li>
+     *   <li>Generated UUID — fallback when neither header is present</li>
+     * </ol>
      */
     SourceMetadata buildSourceMetadata(InboundRequest request, String sourceKey) {
         String facilityId = request.getHeader(HEADER_FACILITY_ID).orElse(null);
         String sourceEventId = request.getHeader(HEADER_SOURCE_EVENT_ID).orElse(null);
-        String correlationId = request.getHeader(HEADER_CORRELATION_ID)
+        String correlationId = request.getHeader(HEADER_OPENHIM_TRANSACTION_ID)
+                .or(() -> request.getHeader(HEADER_CORRELATION_ID))
                 .orElseGet(() -> UUID.randomUUID().toString());
 
         return new SourceMetadata(

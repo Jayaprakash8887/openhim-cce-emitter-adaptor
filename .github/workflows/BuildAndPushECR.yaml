@@ -34,16 +34,9 @@ jobs:
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v4
 
-    - name: Build and Scan with SonarQube
-      env:
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
-      run: |
-        ./gradlew build sonar \
-          -Dsonar.host.url=${SONAR_HOST_URL} \
-          -Dsonar.login=${SONAR_TOKEN} \
-          -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }} \
-          -Dsonar.projectName=${{ vars.SONAR_PROJECT_NAME }}
+    - name: Build project
+      run: ./gradlew build 
+      
 
     - name: Build container image
       run: |

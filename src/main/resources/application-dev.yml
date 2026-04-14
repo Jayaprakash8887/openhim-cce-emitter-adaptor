@@ -34,6 +34,8 @@ cce:
     sources:
       ebuzima:
         client-id: ebuzima-emr-client
+      spice:
+        client-id: spice-fhir-client
 
 management:
   endpoints:

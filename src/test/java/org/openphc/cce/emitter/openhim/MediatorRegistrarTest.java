@@ -38,7 +38,7 @@ class MediatorRegistrarTest {
     @BeforeEach
     void setUp() {
         var coreProps = new OpenHimProperties.CoreProperties("localhost", 8080,
-                "https", "root@openhim.org", "openhim-password");
+                "https", "basic", "root@openhim.org", "openhim-password");
         var heartbeatProps = new OpenHimProperties.HeartbeatProperties(true, 10);
         var openHimProperties = new OpenHimProperties(coreProps, heartbeatProps);
 

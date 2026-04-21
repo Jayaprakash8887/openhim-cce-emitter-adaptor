@@ -4,6 +4,7 @@ import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
+import java.util.Base64;
 
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
@@ -77,11 +78,10 @@ public class RestClientConfig {
     /**
      * Creates a {@link RestClient} for communicating with the OpenHIM Core API.
      *
-     * <p>Configured with:
+     * <p>Supports two authentication modes based on {@code openhim.core.auth-type}:
      * <ul>
-     *   <li>Base URL derived from {@link OpenHimProperties.CoreProperties#apiUrl()}</li>
-     *   <li>OpenHIM token-based authentication via {@link OpenHimAuthInterceptor}</li>
-     *   <li>JSON content type default header</li>
+     *   <li>{@code basic} (default) — HTTP Basic Auth (for local OpenHIM with {@code api_authenticationTypes=["local"]})</li>
+     *   <li>{@code token} — OpenHIM challenge-response auth via {@link OpenHimAuthInterceptor}</li>
      * </ul>
      *
      * @param properties OpenHIM configuration properties
@@ -92,21 +92,27 @@ public class RestClientConfig {
     public RestClient coreApiRestClient(OpenHimProperties properties) {
         SimpleClientHttpRequestFactory requestFactory = createTrustAllRequestFactory();
 
-        // Lightweight RestClient for the /authenticate call (no auth interceptor — avoids recursion)
-        RestClient authRestClient = RestClient.builder()
-                .baseUrl(properties.core().apiUrl())
-                .requestFactory(requestFactory)
-                .build();
-
-        OpenHimAuthInterceptor authInterceptor =
-                new OpenHimAuthInterceptor(properties.core(), authRestClient);
-
-        return RestClient.builder()
+        RestClient.Builder builder = RestClient.builder()
                 .baseUrl(properties.core().apiUrl())
                 .defaultHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE)
-                .requestFactory(requestFactory)
-                .requestInterceptor(authInterceptor)
-                .build();
+                .requestFactory(requestFactory);
+
+        if (properties.core().isTokenAuth()) {
+            log.info("OpenHIM Core API auth: token (challenge-response)");
+            RestClient authRestClient = RestClient.builder()
+                    .baseUrl(properties.core().apiUrl())
+                    .requestFactory(requestFactory)
+                    .build();
+            builder.requestInterceptor(
+                    new OpenHimAuthInterceptor(properties.core(), authRestClient));
+        } else {
+            log.info("OpenHIM Core API auth: basic");
+            String credentials = properties.core().username() + ":" + properties.core().password();
+            String basicAuth = "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes());
+            builder.defaultHeader("Authorization", basicAuth);
+        }
+
+        return builder.build();
     }
 
     /**

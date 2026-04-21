@@ -23,6 +23,7 @@ public record OpenHimProperties(
      * @param host     Core hostname (default: {@code localhost})
      * @param apiPort  Core API port (default: {@code 8080})
      * @param scheme   URL scheme — {@code https} (default) or {@code http}
+     * @param authType Authentication type — {@code basic} (default, for local OpenHIM) or {@code token} (standard OpenHIM challenge-response)
      * @param username Core API username
      * @param password Core API password
      */
@@ -30,6 +31,7 @@ public record OpenHimProperties(
             String host,
             int apiPort,
             String scheme,
+            String authType,
             String username,
             String password
     ) {
@@ -42,6 +44,13 @@ public record OpenHimProperties(
         public String apiUrl() {
             String s = (scheme != null && !scheme.isBlank()) ? scheme : "https";
             return s + "://" + host + ":" + apiPort;
+        }
+
+        /**
+         * Returns whether token-based (challenge-response) auth should be used.
+         */
+        public boolean isTokenAuth() {
+            return "token".equalsIgnoreCase(authType);
         }
     }
 

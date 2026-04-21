@@ -16,6 +16,7 @@ openhim:
     host: ${OPENHIM_CORE_HOST}
     api-port: ${OPENHIM_CORE_API_PORT:8080}
     scheme: ${OPENHIM_CORE_SCHEME:https}
+    auth-type: ${OPENHIM_CORE_AUTH_TYPE:basic}
     username: ${OPENHIM_USERNAME}
     password: ${OPENHIM_PASSWORD}
   heartbeat:

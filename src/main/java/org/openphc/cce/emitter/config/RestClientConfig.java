@@ -4,13 +4,13 @@ import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
-import java.util.Base64;
 
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
+import org.openphc.cce.emitter.openhim.OpenHimAuthInterceptor;
 import org.openphc.cce.emitter.service.CollectorTokenService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -80,7 +80,7 @@ public class RestClientConfig {
      * <p>Configured with:
      * <ul>
      *   <li>Base URL derived from {@link OpenHimProperties.CoreProperties#apiUrl()}</li>
-     *   <li>Basic Authentication header from Core username/password</li>
+     *   <li>OpenHIM token-based authentication via {@link OpenHimAuthInterceptor}</li>
      *   <li>JSON content type default header</li>
      * </ul>
      *
@@ -90,16 +90,22 @@ public class RestClientConfig {
     @Bean
     @Qualifier("coreApiRestClient")
     public RestClient coreApiRestClient(OpenHimProperties properties) {
-        String credentials = properties.core().username() + ":" + properties.core().password();
-        String basicAuth = "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes());
-
         SimpleClientHttpRequestFactory requestFactory = createTrustAllRequestFactory();
+
+        // Lightweight RestClient for the /authenticate call (no auth interceptor — avoids recursion)
+        RestClient authRestClient = RestClient.builder()
+                .baseUrl(properties.core().apiUrl())
+                .requestFactory(requestFactory)
+                .build();
+
+        OpenHimAuthInterceptor authInterceptor =
+                new OpenHimAuthInterceptor(properties.core(), authRestClient);
 
         return RestClient.builder()
                 .baseUrl(properties.core().apiUrl())
-                .defaultHeader("Authorization", basicAuth)
                 .defaultHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE)
                 .requestFactory(requestFactory)
+                .requestInterceptor(authInterceptor)
                 .build();
     }
 

@@ -22,12 +22,14 @@ public record OpenHimProperties(
      *
      * @param host     Core hostname (default: {@code localhost})
      * @param apiPort  Core API port (default: {@code 8080})
+     * @param scheme   URL scheme — {@code https} (default) or {@code http}
      * @param username Core API username
      * @param password Core API password
      */
     public record CoreProperties(
             String host,
             int apiPort,
+            String scheme,
             String username,
             String password
     ) {
@@ -35,10 +37,11 @@ public record OpenHimProperties(
         /**
          * Constructs the full OpenHIM Core API base URL.
          *
-         * @return base URL in the form {@code https://<host>:<apiPort>}
+         * @return base URL in the form {@code <scheme>://<host>:<apiPort>}
          */
         public String apiUrl() {
-            return "https://" + host + ":" + apiPort;
+            String s = (scheme != null && !scheme.isBlank()) ? scheme : "https";
+            return s + "://" + host + ":" + apiPort;
         }
     }
 

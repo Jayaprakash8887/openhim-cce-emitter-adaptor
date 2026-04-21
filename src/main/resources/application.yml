@@ -48,7 +48,7 @@ cce:
   emitter:
     sources:
       ebuzima:
-        client-id: ebuzima-emr-client
+        client-id: ebuzima
 
 # Actuator & Metrics
 management:

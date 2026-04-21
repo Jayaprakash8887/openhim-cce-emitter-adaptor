@@ -1,9 +1,10 @@
 package org.openphc.cce.emitter.openhim;
 
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.util.HexFormat;
 
 import org.openphc.cce.emitter.config.OpenHimProperties;
 import org.slf4j.Logger;
@@ -17,19 +18,21 @@ import org.springframework.web.client.RestClient;
 
 /**
  * Intercepts outbound HTTP requests to OpenHIM Core API and applies the
- * standard OpenHIM token-based authentication.
+ * standard OpenHIM token-based (custom) authentication.
  *
- * <p>OpenHIM's API auth flow:
+ * <p>OpenHIM's token auth flow:
  * <ol>
  *   <li>{@code GET /authenticate/<email>} → returns {@code {salt, ts}}</li>
- *   <li>Compute {@code passwordHash = SHA-512(salt + password)}</li>
- *   <li>Compute {@code token = SHA-512(passwordHash + salt + ts)}</li>
- *   <li>Send request with headers: {@code auth-username}, {@code auth-ts}, {@code Authorization: Custom <token>}</li>
+ *   <li>Compute {@code passwordHash = SHA-512(serverSalt + password)}</li>
+ *   <li>Generate a random client {@code authSalt}</li>
+ *   <li>Compute {@code authToken = SHA-512(passwordHash + authSalt + ts)}</li>
+ *   <li>Send headers: {@code auth-username}, {@code auth-ts}, {@code auth-salt}, {@code auth-token}</li>
  * </ol>
  */
 public class OpenHimAuthInterceptor implements ClientHttpRequestInterceptor {
 
     private static final Logger log = LoggerFactory.getLogger(OpenHimAuthInterceptor.class);
+    private static final SecureRandom RANDOM = new SecureRandom();
 
     private final OpenHimProperties.CoreProperties coreProperties;
     private final RestClient authRestClient;
@@ -44,13 +47,23 @@ public class OpenHimAuthInterceptor implements ClientHttpRequestInterceptor {
             ClientHttpRequestExecution execution) throws java.io.IOException {
         try {
             AuthChallenge challenge = fetchAuthChallenge();
+
+            // passwordHash = SHA512(serverSalt + password)
             String passwordHash = sha512Hex(challenge.salt() + coreProperties.password());
-            String token = sha512Hex(passwordHash + challenge.salt() + challenge.ts());
+
+            // Generate random client salt
+            byte[] saltBytes = new byte[16];
+            RANDOM.nextBytes(saltBytes);
+            String authSalt = HexFormat.of().formatHex(saltBytes);
+
+            // authToken = SHA512(passwordHash + authSalt + ts)
+            String authToken = sha512Hex(passwordHash + authSalt + challenge.ts());
 
             HttpHeaders headers = request.getHeaders();
             headers.set("auth-username", coreProperties.username());
             headers.set("auth-ts", challenge.ts());
-            headers.set("Authorization", "Custom " + token);
+            headers.set("auth-salt", authSalt);
+            headers.set("auth-token", authToken);
         } catch (Exception e) {
             log.warn("Failed to compute OpenHIM auth token, falling back to no auth: {}", e.getMessage());
         }
@@ -83,4 +96,5 @@ public class OpenHimAuthInterceptor implements ClientHttpRequestInterceptor {
      * Response from OpenHIM Core's {@code /authenticate/<email>} endpoint.
      */
     record AuthChallenge(String salt, String ts) {}
+}
 }

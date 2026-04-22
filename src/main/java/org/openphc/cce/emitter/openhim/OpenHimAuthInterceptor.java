@@ -97,4 +97,3 @@ public class OpenHimAuthInterceptor implements ClientHttpRequestInterceptor {
      */
     record AuthChallenge(String salt, String ts) {}
 }
-}

@@ -5,6 +5,7 @@ import org.hl7.fhir.r4.model.Bundle;
 import org.openphc.cce.emitter.cloudevents.CloudEventEnvelopeBuilder;
 import org.openphc.cce.emitter.config.EmitterProperties;
 import org.openphc.cce.emitter.config.EmitterProperties.SourceProperties;
+import org.openphc.cce.emitter.fhir.FacilityIdExtractor;
 import org.openphc.cce.emitter.fhir.FhirResourceParser;
 import org.openphc.cce.emitter.fhir.PatientIdExtractor;
 import org.openphc.cce.emitter.model.CloudEventDto;
@@ -55,16 +56,19 @@ public class SourceAdaptorService {
     private final Map<String, SourceProperties> sources;
     private final FhirResourceParser fhirResourceParser;
     private final PatientIdExtractor patientIdExtractor;
+    private final FacilityIdExtractor facilityIdExtractor;
     private final CloudEventEnvelopeBuilder cloudEventEnvelopeBuilder;
 
     public SourceAdaptorService(
             EmitterProperties emitterProperties,
             FhirResourceParser fhirResourceParser,
             PatientIdExtractor patientIdExtractor,
+            FacilityIdExtractor facilityIdExtractor,
             CloudEventEnvelopeBuilder cloudEventEnvelopeBuilder) {
         this.sources = emitterProperties.sources() != null ? emitterProperties.sources() : Map.of();
         this.fhirResourceParser = fhirResourceParser;
         this.patientIdExtractor = patientIdExtractor;
+        this.facilityIdExtractor = facilityIdExtractor;
         this.cloudEventEnvelopeBuilder = cloudEventEnvelopeBuilder;
 
         if (sources.isEmpty()) {
@@ -157,8 +161,8 @@ public class SourceAdaptorService {
         String resourceType = resource.fhirType();
         String patientUpid = patientIdExtractor.extract(resource);
 
-        // Build source metadata from headers
-        SourceMetadata metadata = buildSourceMetadata(request, sourceKey);
+        // Build source metadata from headers, with FHIR location fallback for facility
+        SourceMetadata metadata = buildSourceMetadata(request, sourceKey, resource);
 
         // Build CloudEvent
         CloudEventDto event = cloudEventEnvelopeBuilder.build(body, patientUpid, resourceType, metadata);
@@ -172,6 +176,12 @@ public class SourceAdaptorService {
     /**
      * Builds {@link SourceMetadata} from inbound request headers.
      *
+     * <p>Facility ID resolution priority:
+     * <ol>
+     *   <li>{@code X-Facility-Id} header — explicit facility from the source system</li>
+     *   <li>FHIR resource {@code location[0].location.reference} — extracted from Encounter payload</li>
+     * </ol>
+     *
      * <p>Correlation ID priority chain:
      * <ol>
      *   <li>{@code X-OpenHIM-TransactionID} — OpenHIM Core's transaction ID (preferred — links to OpenHIM transaction log)</li>
@@ -179,8 +189,17 @@ public class SourceAdaptorService {
      *   <li>Generated UUID — fallback when neither header is present</li>
      * </ol>
      */
-    SourceMetadata buildSourceMetadata(InboundRequest request, String sourceKey) {
+    SourceMetadata buildSourceMetadata(InboundRequest request, String sourceKey, IBaseResource resource) {
         String facilityId = request.getHeader(HEADER_FACILITY_ID).orElse(null);
+
+        // Fallback: extract facility from FHIR resource location when header is absent
+        if (facilityId == null && resource != null) {
+            facilityId = facilityIdExtractor.extract(resource);
+            if (facilityId != null) {
+                log.info("Facility ID '{}' extracted from FHIR resource (no X-Facility-Id header)", facilityId);
+            }
+        }
+
         String sourceEventId = request.getHeader(HEADER_SOURCE_EVENT_ID).orElse(null);
         String correlationId = request.getHeader(HEADER_OPENHIM_TRANSACTION_ID)
                 .or(() -> request.getHeader(HEADER_CORRELATION_ID))

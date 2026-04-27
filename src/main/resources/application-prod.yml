@@ -41,6 +41,8 @@ cce:
     sources:
       ebuzima:
         client-id: ${EBUZIMA_CLIENT_ID}
+      spice:
+        client-id: ${SPICE_CLIENT_ID}
 
 management:
   endpoints:

@@ -12,6 +12,7 @@ import org.openphc.cce.emitter.config.EmitterProperties;
 import org.openphc.cce.emitter.config.EmitterProperties.SourceProperties;
 import org.openphc.cce.emitter.exception.FhirMappingException;
 import org.openphc.cce.emitter.exception.PatientIdNotFoundException;
+import org.openphc.cce.emitter.fhir.FacilityIdExtractor;
 import org.openphc.cce.emitter.fhir.FhirResourceParser;
 import org.openphc.cce.emitter.fhir.PatientIdExtractor;
 import org.openphc.cce.emitter.model.CloudEventDto;
@@ -51,6 +52,7 @@ class SourceAdaptorServiceTest {
         FhirContext fhirContext = FhirContext.forR4();
         FhirResourceParser fhirResourceParser = new FhirResourceParser(fhirContext);
         PatientIdExtractor patientIdExtractor = new PatientIdExtractor();
+        FacilityIdExtractor facilityIdExtractor = new FacilityIdExtractor();
         ObjectMapper objectMapper = new ObjectMapper();
         EventIdGenerator idGenerator = new EventIdGenerator();
         CloudEventEnvelopeBuilder envelopeBuilder = new CloudEventEnvelopeBuilder(idGenerator, objectMapper);
@@ -60,7 +62,7 @@ class SourceAdaptorServiceTest {
 
         service = new SourceAdaptorService(
                 emitterProperties,
-                fhirResourceParser, patientIdExtractor, envelopeBuilder);
+                fhirResourceParser, patientIdExtractor, facilityIdExtractor, envelopeBuilder);
 
         encounterJson = loadFixture("ebuzima/fhir-encounter.json");
         observationJson = loadFixture("ebuzima/fhir-observation.json");
@@ -169,11 +171,7 @@ class SourceAdaptorServiceTest {
 
             multiService = new SourceAdaptorService(
                     emitterProperties,
-                    fhirResourceParser, patientIdExtractor, envelopeBuilder);
-        }
-
-        @Test
-        void matchesCorrectSourceByClientId() {
+                    fhirResourceParser, patientIdExtractor, new FacilityIdExtractor(), envelopeBuilder);
             InboundRequest request = InboundRequest.from(
                     "{}", Map.of("X-OpenHIM-ClientID", "dhis2-client"), "/inbound");
 
@@ -214,7 +212,7 @@ class SourceAdaptorServiceTest {
             EmitterProperties emitterProperties = new EmitterProperties(Map.of());
             SourceAdaptorService emptyService = new SourceAdaptorService(
                     emitterProperties,
-                    fhirResourceParser, patientIdExtractor, envelopeBuilder);
+                    fhirResourceParser, patientIdExtractor, new FacilityIdExtractor(), envelopeBuilder);
 
             InboundRequest request = InboundRequest.from(
                     "{}", Map.of("X-OpenHIM-ClientID", CLIENT_ID), "/inbound");
@@ -479,7 +477,7 @@ class SourceAdaptorServiceTest {
                             "X-Correlation-Id", "corr-abc-123"),
                     "/inbound");
 
-            SourceMetadata metadata = service.buildSourceMetadata(request, SOURCE_KEY);
+            SourceMetadata metadata = service.buildSourceMetadata(request, SOURCE_KEY, null);
 
             assertThat(metadata.sourceIdentifier()).isEqualTo(SOURCE_KEY);
             assertThat(metadata.facilityId()).isEqualTo("0002");
@@ -499,7 +497,7 @@ class SourceAdaptorServiceTest {
                             "X-Correlation-Id", "corr-should-be-ignored"),
                     "/inbound");
 
-            SourceMetadata metadata = service.buildSourceMetadata(request, SOURCE_KEY);
+            SourceMetadata metadata = service.buildSourceMetadata(request, SOURCE_KEY, null);
 
             assertThat(metadata.correlationId()).isEqualTo("65abc123def456789012abcd");
         }
@@ -513,7 +511,7 @@ class SourceAdaptorServiceTest {
                             "X-OpenHIM-TransactionID", "65abc123def456789012abcd"),
                     "/inbound");
 
-            SourceMetadata metadata = service.buildSourceMetadata(request, SOURCE_KEY);
+            SourceMetadata metadata = service.buildSourceMetadata(request, SOURCE_KEY, null);
 
             assertThat(metadata.correlationId()).isEqualTo("65abc123def456789012abcd");
         }
@@ -527,7 +525,7 @@ class SourceAdaptorServiceTest {
                             "X-Correlation-Id", "corr-fallback-001"),
                     "/inbound");
 
-            SourceMetadata metadata = service.buildSourceMetadata(request, SOURCE_KEY);
+            SourceMetadata metadata = service.buildSourceMetadata(request, SOURCE_KEY, null);
 
             assertThat(metadata.correlationId()).isEqualTo("corr-fallback-001");
         }
@@ -539,7 +537,7 @@ class SourceAdaptorServiceTest {
                     Map.of("X-OpenHIM-ClientID", CLIENT_ID),
                     "/inbound");
 
-            SourceMetadata metadata = service.buildSourceMetadata(request, SOURCE_KEY);
+            SourceMetadata metadata = service.buildSourceMetadata(request, SOURCE_KEY, null);
 
             assertThat(metadata.correlationId()).isNotNull().isNotBlank();
             assertThat(metadata.correlationId())
@@ -553,7 +551,7 @@ class SourceAdaptorServiceTest {
                     Map.of(),
                     "/inbound");
 
-            SourceMetadata metadata = service.buildSourceMetadata(request, SOURCE_KEY);
+            SourceMetadata metadata = service.buildSourceMetadata(request, SOURCE_KEY, null);
 
             assertThat(metadata.facilityId()).isNull();
             assertThat(metadata.sourceEventId()).isNull();

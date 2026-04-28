@@ -22,6 +22,8 @@ openhim:
   core:
     host: localhost
     api-port: 8080
+    scheme: https
+    auth-type: basic
     username: root@openhim.org
     password: openhim-password
   heartbeat:

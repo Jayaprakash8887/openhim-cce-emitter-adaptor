@@ -1,5 +1,5 @@
 server:
-  port: 8081
+  port: 8082
   servlet:
     context-path: /
 
@@ -23,7 +23,7 @@ openhim:
     host: localhost
     api-port: 8080
     username: root@openhim.org
-    password: "123456"
+    password: openhim-password
   heartbeat:
     enabled: true
     interval-seconds: 10
@@ -31,7 +31,7 @@ openhim:
 # CCE Collector Configuration
 cce:
   collector:
-    url: http://localhost:8082
+    url: http://localhost:5001
     events-path: /v1/events
     timeout: 5000
     retry:

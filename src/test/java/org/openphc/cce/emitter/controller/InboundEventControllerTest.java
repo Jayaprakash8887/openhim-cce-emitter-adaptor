@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.openphc.cce.emitter.config.MediatorProperties;
 import org.openphc.cce.emitter.exception.CollectorClientException;
 import org.openphc.cce.emitter.exception.CollectorForwardingException;
 import org.openphc.cce.emitter.exception.GlobalExceptionHandler;
@@ -22,6 +23,7 @@ import java.util.List;
 import static org.hamcrest.Matchers.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -49,7 +51,11 @@ class InboundEventControllerTest {
     void setUp() {
         objectMapper = new ObjectMapper();
 
-        InboundEventController controller = new InboundEventController(inboundEventService, objectMapper);
+        MediatorProperties mediatorProperties = new MediatorProperties(
+                "urn:mediator:cce-emitter-adaptor", "1.0.0", "CCE Emitter Adaptor", null);
+
+        InboundEventController controller = new InboundEventController(
+                inboundEventService, objectMapper, mediatorProperties);
 
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
@@ -247,6 +253,31 @@ class InboundEventControllerTest {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(ENCOUNTER_JSON))
                     .andExpect(content().contentTypeCompatibleWith(OPENHIM_MEDIA_TYPE));
+        }
+    }
+
+    // ==================== Non-POST method handling ====================
+
+    @Nested
+    class NonPostMethods {
+
+        @Test
+        void getRequest_returns200WithIgnoreMessage() throws Exception {
+            mockMvc.perform(get(INBOUND_PATH))
+                    .andExpect(status().isOk())
+                    .andExpect(content().contentTypeCompatibleWith(OPENHIM_MEDIA_TYPE))
+                    .andExpect(jsonPath("$.x-mediator-urn", is("urn:mediator:cce-emitter-adaptor")))
+                    .andExpect(jsonPath("$.status", is("Successful")))
+                    .andExpect(jsonPath("$.response.status", is(200)))
+                    .andExpect(jsonPath("$.response.body", containsString("Non-POST request ignored")))
+                    .andExpect(jsonPath("$.orchestrations", hasSize(0)));
+        }
+
+        @Test
+        void getRequest_doesNotInvokeService() throws Exception {
+            mockMvc.perform(get(INBOUND_PATH));
+
+            verifyNoInteractions(inboundEventService);
         }
     }
 }

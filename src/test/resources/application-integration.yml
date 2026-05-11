@@ -42,6 +42,8 @@ cce:
         client-id: ebuzima-emr-client
       spice:
         client-id: spice-fhir-client
+      openmrs:
+        client-id: openmrs-fhir-client
 
 management:
   endpoints:

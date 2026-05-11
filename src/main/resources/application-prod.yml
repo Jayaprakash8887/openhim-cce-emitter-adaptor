@@ -43,6 +43,8 @@ cce:
         client-id: ${EBUZIMA_CLIENT_ID}
       spice:
         client-id: ${SPICE_CLIENT_ID}
+      openmrs:
+        client-id: ${OPENMRS_CLIENT_ID}
 
 management:
   endpoints:

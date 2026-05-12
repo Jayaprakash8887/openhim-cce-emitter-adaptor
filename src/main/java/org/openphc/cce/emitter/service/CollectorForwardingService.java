@@ -21,6 +21,8 @@ import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
+import java.net.SocketTimeoutException;
+
 /**
  * Forwards CloudEvents to the CCE Collector via HTTP POST with retry support.
  *
@@ -136,10 +138,27 @@ public class CollectorForwardingService {
 
         } catch (ResourceAccessException ex) {
             // Network timeout / connection refused — retryable
+            // Also covers SocketTimeoutException wrapped by Spring's HTTP client
             log.warn("Collector unreachable for CloudEvent id={} — {} (will retry)",
                     event.getId(), ex.getMessage());
             throw new CollectorForwardingException(
                     "Collector unreachable: " + ex.getMessage(), ex);
+
+        } catch (Exception ex) {
+            // SocketTimeoutException can escape ResourceAccessException wrapping when
+            // it occurs during response header/body reading in RestClient's message
+            // converters (outside the HTTP client layer). Treat as retryable.
+            if (ex instanceof SocketTimeoutException || ex.getCause() instanceof SocketTimeoutException) {
+                log.warn("Collector read timed out for CloudEvent id={} — {} (will retry)",
+                        event.getId(), ex.getMessage());
+                throw new CollectorForwardingException(
+                        "Collector read timed out: " + ex.getMessage(), ex);
+            }
+            // Unexpected errors — log at ERROR and let the GlobalExceptionHandler deal with it
+            log.error("Unexpected error forwarding CloudEvent id={} — {}",
+                    event.getId(), ex.getMessage(), ex);
+            throw new RuntimeException(
+                    "Unexpected error forwarding to Collector: " + ex.getMessage(), ex);
         }
     }
 
@@ -157,5 +176,16 @@ public class CollectorForwardingService {
         retriesCounter.increment();
         throw new CollectorForwardingException(
                 "Collector forwarding failed after all retries: " + ex.getMessage(), ex);
+    }
+
+    /**
+     * Recovery method for non-retryable client errors.
+     * Re-throws the original exception so it propagates to the error handler.
+     */
+    @Recover
+    public CollectorResponse recover(CollectorClientException ex, CloudEventDto event) {
+        log.warn("Non-retryable client error for CloudEvent id={} — {}",
+                event != null ? event.getId() : "unknown", ex.getMessage());
+        throw ex;
     }
 }

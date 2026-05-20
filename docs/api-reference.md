@@ -13,6 +13,8 @@
 
 The adaptor exposes a single inbound endpoint. Source system adaptor is selected based on request headers (`X-OpenHIM-ClientID`).
 
+> **Non-POST Handling:** OpenHIM secondary routes forward ALL HTTP methods matching the channel URL pattern. Since this mediator only processes POST requests, non-POST methods (GET, PUT, DELETE, PATCH, HEAD, OPTIONS) are acknowledged with a `200 OK` OpenHIM envelope containing `"Non-POST request ignored"`. This avoids polluting the OpenHIM transaction log with 405 errors.
+
 ### 2.1 POST /inbound
 
 Generic inbound endpoint. Routes to the matching source based on `X-OpenHIM-ClientID` header (matched against configured client IDs in `cce.emitter.sources`).
@@ -39,7 +41,16 @@ POST /inbound
 
 > **Note:** This header list is derived from the CCE solution design document and local OpenHIM testing. The actual headers available may change based on the RHIE deployment configuration.
 
-**Body:** Valid FHIR R4 resource JSON — an individual resource (e.g., `Encounter`, `Observation`). Bundle resources are silently ignored (out of scope for v1.0).
+**Body:** Valid FHIR R4 resource JSON — an individual resource (e.g., `Encounter`, `Observation`, `Patient`, `RelatedPerson`). Bundle resources are silently ignored (out of scope for v1.0).
+
+**Supported FHIR Resource Types:**
+
+| Resource Type | Subject Extraction |
+|--------------|--------------------|
+| `Patient` | Extracted from `Patient.identifier[]` matching configured system URI (`http://openphc.org/identifier/upid`), falling back to `Patient.id` |
+| `RelatedPerson` | Extracted from `RelatedPerson.patient` reference |
+| `Encounter`, `Observation`, `Condition`, `MedicationRequest`, `MedicationDispense`, `ServiceRequest`, `Procedure`, `DiagnosticReport` | Extracted from `subject` reference |
+| `EpisodeOfCare`, `Immunization` | Extracted from `patient` reference |
 
 ### Response Format
 
@@ -134,7 +145,53 @@ curl -X POST http://localhost:8082/inbound \
 }
 ```
 
-### 3.2 FHIR Bundle (Out of Scope)
+### 3.2 FHIR Patient Resource
+
+**Request:**
+
+```bash
+curl -X POST http://localhost:8082/inbound \
+  -H "Content-Type: application/json" \
+  -H "X-OpenHIM-ClientID: ebuzima-emr-client" \
+  -d '{
+    "resourceType": "Patient",
+    "id": "pat-uuid-001",
+    "identifier": [
+      {
+        "system": "http://openphc.org/identifier/upid",
+        "value": "260225-0002-5501"
+      }
+    ],
+    "name": [{"family": "KAYITESI", "given": ["Marie-Claire"]}]
+  }'
+```
+
+**Subject extraction:** The UPID `260225-0002-5501` is extracted from `Patient.identifier[]` where `system` matches the configured `cce.emitter.patient-identifier-system` URI. If no matching identifier is found, `Patient.id` is used as fallback.
+
+### 3.3 Non-POST Request (Silently Ignored)
+
+```bash
+curl -X GET http://localhost:8082/inbound \
+  -H "X-OpenHIM-ClientID: ebuzima-emr-client"
+```
+
+**Response:** `200 OK`
+
+```json
+{
+  "x-mediator-urn": "urn:mediator:cce-emitter-adaptor",
+  "status": "Successful",
+  "response": {
+    "status": 200,
+    "headers": {"Content-Type": "application/json"},
+    "body": "{\"message\":\"Non-POST request ignored\",\"method\":\"GET\"}",
+    "timestamp": "2026-02-25T08:00:00Z"
+  },
+  "orchestrations": []
+}
+```
+
+### 3.4 FHIR Bundle (Out of Scope)
 
 Bundle resources (`"resourceType": "Bundle"`) are silently ignored — the adaptor returns a 200 OK response with no processing. Bundle support will be added in a future release.
 
@@ -164,7 +221,25 @@ When no source adaptor matches the inbound request (no `X-OpenHIM-ClientID` or `
 }
 ```
 
-### 4.3 Collector Forwarding Failure (502)
+### 4.3 Internal Server Error (500)
+
+Caught by the global catch-all exception handler for any unexpected errors not covered by specific handlers.
+
+```json
+{
+  "x-mediator-urn": "urn:mediator:cce-emitter-adaptor",
+  "status": "Failed",
+  "response": {
+    "status": 500,
+    "headers": {"Content-Type": "application/json"},
+    "body": "{\"error\":{\"code\":\"INTERNAL_ERROR\",\"message\":\"Unexpected error details\"}}",
+    "timestamp": "2026-02-25T08:00:05Z"
+  },
+  "orchestrations": []
+}
+```
+
+### 4.4 Collector Forwarding Failure (502)
 
 ```json
 {

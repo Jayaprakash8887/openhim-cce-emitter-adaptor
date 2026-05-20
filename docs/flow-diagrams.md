@@ -162,6 +162,10 @@ sequenceDiagram
                 Fwd->>Fwd: @Recover → throw CollectorForwardingException
             end
         end
+    else SocketTimeoutException (read timeout)
+        Note over Fwd: Caught via catch-all with instanceof check
+        Fwd->>Log: Collector read timed out (will retry)
+        Note over Fwd: Wraps as CollectorForwardingException → triggers @Retryable
     end
 ```
 
@@ -201,7 +205,10 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    A[Inbound Request] --> B{Parse OK?}
+    A[Inbound Request] --> AA{POST method?}
+
+    AA -->|No| AB[Return 200 OK<br/>Non-POST request ignored]
+    AA -->|Yes| B{Parse OK?}
 
     B -->|No| C[GlobalExceptionHandler<br/>400/500]
     B -->|Yes| D{Adaptor found?}
@@ -219,7 +226,9 @@ flowchart TD
     J -->|200 Dup| L[Duplicate → still 202]
     J -->|400 Client| M[CollectorClientException<br/>→ include in batch result]
     J -->|5xx × 3| N[CollectorForwardingException<br/>→ 502 COLLECTOR_FORWARDING_ERROR]
+    J -->|Unexpected| UE[RuntimeException<br/>→ 500 INTERNAL_ERROR]
 
+    AB --> P
     C --> O[OpenHimResponseWrapper<br/>wraps error in mediator envelope]
     E --> P
     G --> O
@@ -228,15 +237,18 @@ flowchart TD
     L --> O
     M --> O
     N --> O
+    UE --> O
 
     O --> P[Return to OpenHIM Core]
 
     style K fill:#e8f5e9
     style L fill:#fff3e0
+    style AB fill:#e3f2fd
     style E fill:#ffebee
     style G fill:#ffebee
     style I fill:#ffebee
     style N fill:#ffebee
+    style UE fill:#ffebee
 ```
 
 ## 7. Component Dependency Graph

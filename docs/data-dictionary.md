@@ -12,7 +12,7 @@ The adaptor outputs CloudEvents v1.0-compliant JSON to the CCE Collector.
 | `id` | string (UUID) | **Yes** | Generated | Unique event identifier (`UUID.randomUUID()` or deterministic hash) |
 | `source` | string (URI) | **Yes** | Adaptor | Source system identifier (e.g. `"ebuzima"`) |
 | `type` | string | **Yes** | From FHIR resource | FHIR `resourceType` value as-is (e.g., `"Encounter"`, `"Observation"`) |
-| `subject` | string | Recommended | Extracted from FHIR | Patient UPID (`Patient/<upid>` or bare UPID). Used as Kafka partition key. |
+| `subject` | string | Recommended | Extracted from FHIR | Patient UPID. For Patient resources: extracted from `identifier[]` matching configured system URI, then `Patient.id` fallback. For other resources: from `subject` or `patient` reference (prefix stripped). Used as Kafka partition key. |
 | `time` | string (ISO-8601) | Recommended | Adaptor | Event creation timestamp in UTC |
 | `datacontenttype` | string | Recommended | Static | Always `"application/fhir+json"` |
 | `data` | object | Recommended | From FHIR resource | FHIR R4 resource JSON |
@@ -131,10 +131,11 @@ Prefix: `cce.collector`
 
 ### 3.4 Emitter Source Properties
 
-Prefix: `cce.emitter.sources`
+Prefix: `cce.emitter`
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
+| `cce.emitter.patient-identifier-system` | String | `http://openphc.org/identifier/upid` | System URI used to match the UPID in `Patient.identifier[]`. When processing a Patient resource, the adaptor searches `identifier[]` for an entry with this system and uses its `value` as the subject. Falls back to `Patient.id` if no match. |
 | `cce.emitter.sources.ebuzima.client-id` | String | `ebuzima-emr-client` | OpenHIM client ID for eBUZIMA EMR. Matched against `X-OpenHIM-ClientID` or `X-Source-System` header for adaptor routing. |
 
 ### 3.5 Server Properties

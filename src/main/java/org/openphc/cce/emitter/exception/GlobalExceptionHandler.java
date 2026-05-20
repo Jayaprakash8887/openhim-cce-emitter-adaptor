@@ -60,6 +60,12 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(status, "COLLECTOR_CLIENT_ERROR", ex.getMessage());
     }
 
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<Map<String, Object>> handleUnexpectedException(Exception ex) {
+        log.error("Unexpected error processing inbound request: {}", ex.getMessage(), ex);
+        return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", ex.getMessage());
+    }
+
     private ResponseEntity<Map<String, Object>> buildErrorResponse(
             HttpStatus status, String code, String message) {
         Map<String, Object> body = Map.of(

@@ -37,6 +37,7 @@ cce:
     auth:
       token: test-token
   emitter:
+    patient-identifier-system: "http://openphc.org/identifier/upid"
     sources:
       ebuzima:
         client-id: ebuzima-emr-client

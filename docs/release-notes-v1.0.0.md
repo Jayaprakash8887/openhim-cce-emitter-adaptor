@@ -15,11 +15,15 @@ First production release of the **CCE Emitter Adaptor** — an OpenHIM mediator 
 
 | Feature | Description |
 |---------|-------------|
-| **FHIR R4 Ingestion** | Receives individual FHIR resources (Encounter, Observation, Condition, etc.) via `POST /inbound` |
+| **FHIR R4 Ingestion** | Receives individual FHIR resources (Encounter, Observation, Patient, RelatedPerson, Condition, etc.) via `POST /inbound` |
+| **Patient & RelatedPerson Support** | Patient resources extract UPID from `Patient.identifier[]` (matching configured system URI `http://openphc.org/identifier/upid`) with `Patient.id` fallback. RelatedPerson extracts from `patient` reference. |
 | **Source Routing** | Config-driven source resolution via `X-OpenHIM-ClientID` or `X-Source-System` headers |
 | **CloudEvents v1.0** | Wraps FHIR resources in spec-compliant CloudEvents with CCE extensions (`facilityid`, `sourceeventid`, `correlationid`) |
 | **Correlation ID from OpenHIM** | Uses `X-OpenHIM-TransactionID` header (set automatically by OpenHIM Core) as the preferred `correlationid`. Falls back to `X-Correlation-Id`, then adaptor-generated UUID. |
+| **Non-POST Request Handling** | Gracefully acknowledges non-POST requests (GET, PUT, DELETE, PATCH, HEAD, OPTIONS) with 200 OK to avoid 405 errors in OpenHIM transaction log |
 | **Collector Forwarding** | POSTs CloudEvents to CCE Collector with retry + exponential backoff (configurable max attempts) |
+| **SocketTimeoutException Handling** | Specifically detects `SocketTimeoutException` (including when not wrapped in `ResourceAccessException`) and treats as retryable |
+| **Global Error Handling** | Catch-all exception handler returns structured 500 `INTERNAL_ERROR` responses for unexpected failures |
 | **OAuth2 Authentication** | Keycloak `client_credentials` token management for Collector auth (`CollectorTokenService`). Automatic caching and refresh. Falls back to static Bearer token for local dev. |
 | **OpenHIM Lifecycle** | Automatic registration on startup, periodic heartbeat, `application/json+openhim` response envelope |
 | **Observability** | Micrometer/Prometheus metrics (6 custom metrics), structured MDC logging (dev: human-readable, prod: JSON) |

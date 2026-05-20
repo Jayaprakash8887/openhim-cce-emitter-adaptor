@@ -195,6 +195,7 @@ cce:
       client-id:
       client-secret:
   emitter:
+    patient-identifier-system: "http://openphc.org/identifier/upid"
     sources:
       ebuzima:
         client-id: ebuzima-emr-client  # OpenHIM client ID for eBUZIMA EMR
@@ -260,6 +261,7 @@ cce:
     auth:
       token: dev-token
   emitter:
+    patient-identifier-system: "http://openphc.org/identifier/upid"
     sources:
       ebuzima:
         client-id: ebuzima-emr-client

@@ -144,7 +144,8 @@ public class CollectorForwardingService {
             throw new CollectorForwardingException(
                     "Collector unreachable: " + ex.getMessage(), ex);
 
-        } catch (Exception ex) {
+        } 
+        catch (Exception ex) {
             // SocketTimeoutException can escape ResourceAccessException wrapping when
             // it occurs during response header/body reading in RestClient's message
             // converters (outside the HTTP client layer). Treat as retryable.

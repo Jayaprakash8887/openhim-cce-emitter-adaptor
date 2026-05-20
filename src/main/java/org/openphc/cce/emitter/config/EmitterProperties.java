@@ -15,7 +15,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  */
 @ConfigurationProperties(prefix = "cce.emitter")
 public record EmitterProperties(
-        Map<String, SourceProperties> sources
+        Map<String, SourceProperties> sources,
+        String patientIdentifierSystem
 ) {
 
     /**

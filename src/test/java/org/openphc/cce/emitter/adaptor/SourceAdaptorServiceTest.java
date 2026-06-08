@@ -51,14 +51,15 @@ class SourceAdaptorServiceTest {
     void setUp() throws IOException {
         FhirContext fhirContext = FhirContext.forR4();
         FhirResourceParser fhirResourceParser = new FhirResourceParser(fhirContext);
-        PatientIdExtractor patientIdExtractor = new PatientIdExtractor();
         FacilityIdExtractor facilityIdExtractor = new FacilityIdExtractor();
         ObjectMapper objectMapper = new ObjectMapper();
         EventIdGenerator idGenerator = new EventIdGenerator();
         CloudEventEnvelopeBuilder envelopeBuilder = new CloudEventEnvelopeBuilder(idGenerator, objectMapper);
 
         EmitterProperties emitterProperties = new EmitterProperties(
-                Map.of(SOURCE_KEY, new SourceProperties(CLIENT_ID)));
+                Map.of(SOURCE_KEY, new SourceProperties(CLIENT_ID)),
+                "http://openphc.org/identifier/upid");
+        PatientIdExtractor patientIdExtractor = new PatientIdExtractor(emitterProperties);
 
         service = new SourceAdaptorService(
                 emitterProperties,
@@ -160,14 +161,15 @@ class SourceAdaptorServiceTest {
         void setUp() {
             FhirContext fhirContext = FhirContext.forR4();
             FhirResourceParser fhirResourceParser = new FhirResourceParser(fhirContext);
-            PatientIdExtractor patientIdExtractor = new PatientIdExtractor();
             ObjectMapper objectMapper = new ObjectMapper();
             EventIdGenerator idGenerator = new EventIdGenerator();
             CloudEventEnvelopeBuilder envelopeBuilder = new CloudEventEnvelopeBuilder(idGenerator, objectMapper);
 
             EmitterProperties emitterProperties = new EmitterProperties(Map.of(
                     "ebuzima", new SourceProperties("ebuzima-emr-client"),
-                    "dhis2", new SourceProperties("dhis2-client")));
+                    "dhis2", new SourceProperties("dhis2-client")),
+                    "http://openphc.org/identifier/upid");
+            PatientIdExtractor patientIdExtractor = new PatientIdExtractor(emitterProperties);
 
             multiService = new SourceAdaptorService(
                     emitterProperties,
@@ -204,12 +206,13 @@ class SourceAdaptorServiceTest {
         void emptySourcesConfig_returnsEmpty() {
             FhirContext fhirContext = FhirContext.forR4();
             FhirResourceParser fhirResourceParser = new FhirResourceParser(fhirContext);
-            PatientIdExtractor patientIdExtractor = new PatientIdExtractor();
             ObjectMapper objectMapper = new ObjectMapper();
             EventIdGenerator idGenerator = new EventIdGenerator();
             CloudEventEnvelopeBuilder envelopeBuilder = new CloudEventEnvelopeBuilder(idGenerator, objectMapper);
 
-            EmitterProperties emitterProperties = new EmitterProperties(Map.of());
+            EmitterProperties emitterProperties = new EmitterProperties(Map.of(),
+                    "http://openphc.org/identifier/upid");
+            PatientIdExtractor patientIdExtractor = new PatientIdExtractor(emitterProperties);
             SourceAdaptorService emptyService = new SourceAdaptorService(
                     emitterProperties,
                     fhirResourceParser, patientIdExtractor, new FacilityIdExtractor(), envelopeBuilder);

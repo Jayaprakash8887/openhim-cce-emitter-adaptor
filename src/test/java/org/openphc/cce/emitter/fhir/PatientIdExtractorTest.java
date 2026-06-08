@@ -10,6 +10,7 @@ import org.hl7.fhir.r4.model.Encounter;
 import org.hl7.fhir.r4.model.EpisodeOfCare;
 import org.hl7.fhir.r4.model.FamilyMemberHistory;
 import org.hl7.fhir.r4.model.Goal;
+import org.hl7.fhir.r4.model.Identifier;
 import org.hl7.fhir.r4.model.Immunization;
 import org.hl7.fhir.r4.model.MedicationAdministration;
 import org.hl7.fhir.r4.model.MedicationDispense;
@@ -20,12 +21,16 @@ import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Procedure;
 import org.hl7.fhir.r4.model.Reference;
+import org.hl7.fhir.r4.model.RelatedPerson;
 import org.hl7.fhir.r4.model.RiskAssessment;
 import org.hl7.fhir.r4.model.ServiceRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.openphc.cce.emitter.config.EmitterProperties;
 import org.openphc.cce.emitter.exception.PatientIdNotFoundException;
+
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -39,12 +44,14 @@ class PatientIdExtractorTest {
 
     private static final String PATIENT_UPID = "260225-0002-5501";
     private static final String PATIENT_REF = "Patient/" + PATIENT_UPID;
+    private static final String UPID_SYSTEM = "http://openphc.org/identifier/upid";
 
     private PatientIdExtractor extractor;
 
     @BeforeEach
     void setUp() {
-        extractor = new PatientIdExtractor();
+        EmitterProperties props = new EmitterProperties(Map.of(), UPID_SYSTEM);
+        extractor = new PatientIdExtractor(props);
     }
 
     // --- Subject-based resources (via getSubject()) ---
@@ -194,6 +201,72 @@ class PatientIdExtractorTest {
             resource.setPatient(new Reference(PATIENT_REF));
             assertThat(extractor.extract(resource)).isEqualTo(PATIENT_UPID);
         }
+
+        @Test
+        void extract_relatedPerson_returnsPatientUpid() {
+            RelatedPerson resource = new RelatedPerson();
+            resource.setPatient(new Reference(PATIENT_REF));
+            assertThat(extractor.extract(resource)).isEqualTo(PATIENT_UPID);
+        }
+    }
+
+    // --- Patient resource (self-referencing) ---
+
+    @Nested
+    class PatientResource {
+
+        @Test
+        void extract_patientWithUpidIdentifier_returnsUpidValue() {
+            Patient patient = new Patient();
+            patient.setId("patient-internal-001");
+            patient.addIdentifier(new Identifier()
+                    .setSystem(UPID_SYSTEM)
+                    .setValue(PATIENT_UPID));
+
+            assertThat(extractor.extract(patient)).isEqualTo(PATIENT_UPID);
+        }
+
+        @Test
+        void extract_patientWithMultipleIdentifiers_returnsUpidMatch() {
+            Patient patient = new Patient();
+            patient.setId("patient-internal-001");
+            patient.addIdentifier(new Identifier()
+                    .setSystem("http://hospital.org/mrn")
+                    .setValue("MRN-12345"));
+            patient.addIdentifier(new Identifier()
+                    .setSystem(UPID_SYSTEM)
+                    .setValue(PATIENT_UPID));
+
+            assertThat(extractor.extract(patient)).isEqualTo(PATIENT_UPID);
+        }
+
+        @Test
+        void extract_patientWithNoUpidIdentifier_fallsBackToId() {
+            Patient patient = new Patient();
+            patient.setId(PATIENT_UPID);
+            patient.addIdentifier(new Identifier()
+                    .setSystem("http://hospital.org/mrn")
+                    .setValue("MRN-12345"));
+
+            assertThat(extractor.extract(patient)).isEqualTo(PATIENT_UPID);
+        }
+
+        @Test
+        void extract_patientWithIdOnly_returnsId() {
+            Patient patient = new Patient();
+            patient.setId(PATIENT_UPID);
+
+            assertThat(extractor.extract(patient)).isEqualTo(PATIENT_UPID);
+        }
+
+        @Test
+        void extract_patientWithNoIdentifierAndNoId_throwsException() {
+            Patient patient = new Patient();
+
+            assertThatThrownBy(() -> extractor.extract(patient))
+                    .isInstanceOf(PatientIdNotFoundException.class)
+                    .hasMessageContaining("No UPID found in Patient resource");
+        }
     }
 
     // --- Reference without Patient/ prefix ---
@@ -226,16 +299,6 @@ class PatientIdExtractorTest {
             assertThatThrownBy(() -> extractor.extract(resource))
                     .isInstanceOf(PatientIdNotFoundException.class)
                     .hasMessageContaining("No getSubject() or getPatient() method found");
-        }
-
-        @Test
-        void extract_patientResource_throwsPatientIdNotFoundException() {
-            // Patient itself has no getSubject()/getPatient() returning Reference
-            Patient resource = new Patient();
-            resource.setId("patient-001");
-
-            assertThatThrownBy(() -> extractor.extract(resource))
-                    .isInstanceOf(PatientIdNotFoundException.class);
         }
 
         @Test

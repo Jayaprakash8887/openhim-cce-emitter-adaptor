@@ -87,6 +87,7 @@ If configuring via the OpenHIM Core API directly:
 |--------|-------------|
 | **`primary: false`** | The adaptor does NOT return the primary response to the client. The existing primary route (SHR) remains the authoritative responder. |
 | **Copy of traffic** | OpenHIM Core sends a copy of each eBUZIMA request to both the primary route and all secondary routes simultaneously. |
+| **All HTTP methods forwarded** | Secondary routes receive ALL requests matching the channel URL pattern, regardless of HTTP method. The adaptor gracefully handles non-POST requests (GET, PUT, DELETE, etc.) by returning `200 OK` with a "Non-POST request ignored" message — no 405 errors in the transaction log. |
 | **No disruption** | Adding a secondary route does not affect existing routing. If the adaptor is down, the primary route still functions normally. |
 | **Transaction log** | OpenHIM records the secondary route response in the transaction log for auditability. |
 
@@ -164,8 +165,10 @@ To find the eBUZIMA client ID in OpenHIM:
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | Adaptor not receiving requests | Route not added or channel not saved | Verify route exists on the eBUZIMA channel in OpenHIM Console |
+| Non-POST requests showing `200 OK` with "ignored" | Normal behavior — adaptor acknowledges GET/PUT/etc. gracefully | No action needed; only POST requests are processed |
 | `200 OK` with no processing | `X-OpenHIM-ClientID` doesn't match configured source | Check `EBUZIMA_CLIENT_ID` matches the OpenHIM client ID |
 | Adaptor returns `502` | CCE Collector unreachable or returning 5xx | Check `CCE_COLLECTOR_URL` and Collector health |
+| Adaptor returns `500` | Unexpected internal error | Check adaptor logs for stack traces; `INTERNAL_ERROR` code in response |
 | Route shows as down in Console | Adaptor container not running or port not accessible | Check `docker ps` and network connectivity on port 8082 |
 | Transaction log missing secondary route | Route configured as `primary: true` | Change route to `primary: false` |
 | `422 FHIR_MAPPING_ERROR` | Non-FHIR payload sent through the channel | Expected for non-FHIR requests — adaptor rejects gracefully |

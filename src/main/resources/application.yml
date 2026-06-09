@@ -25,7 +25,7 @@ openhim:
     scheme: https
     auth-type: basic
     username: root@openhim.org
-    password: 123456
+    password: openhim-password
   heartbeat:
     enabled: true
     interval-seconds: 10

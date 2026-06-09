@@ -173,7 +173,55 @@ To find the eBUZIMA client ID in OpenHIM:
 | Transaction log missing secondary route | Route configured as `primary: true` | Change route to `primary: false` |
 | `422 FHIR_MAPPING_ERROR` | Non-FHIR payload sent through the channel | Expected for non-FHIR requests — adaptor rejects gracefully |
 
-## 7. Removing the Route
+## 7. Facility Filter (Phased Rollout)
+
+The facility filter restricts which events are forwarded to the CCE Collector based on facility ID. It is configured entirely via environment variables — no code changes or redeploy needed, only a rolling restart with updated env vars.
+
+### Configuration
+
+| Env Var | Default | Description |
+|---------|---------|-------------|
+| `FACILITY_FILTER_IDS` | — | Comma-separated FOSA facility IDs to allow (e.g. `"0030,0042,0099"`). Empty or unset = all events pass. Non-empty = only listed IDs are admitted. Prefixes like `Organization/` are stripped automatically before comparison. |
+
+### Weekly Rollout Workflow (15 → 30 → … → 350 facilities)
+
+1. Engineer raises a PR updating the deployment manifest, adding 15 IDs to `FACILITY_FILTER_IDS`:
+   ```yaml
+   # Kubernetes Deployment / docker-compose environment
+   FACILITY_FILTER_IDS: >-
+     0030,0042,0099,0101,0203
+   ```
+2. PR review — diff is human-readable; add inline comments mapping IDs to facility names.
+3. CI applies the manifest (`kubectl apply` / `docker compose up -d`).
+4. Rolling restart; readiness probe drains old pods after new pods are ready.
+5. Filter is active. Verify in Grafana: new facilities produce 0 denials, previously filtered facilities now producing forwarded events.
+
+### Denial Behaviour
+
+Events that do not pass the filter return `403 Forbidden` — they are **not** forwarded to the Collector:
+
+```json
+{
+  "error": {
+    "code": "FACILITY_FILTER_REJECTED",
+    "message": "Event rejected by facility filter: facilityId='9999' source='spice' reason=NOT_IN_ALLOWLIST"
+  }
+}
+```
+
+OpenHIM records this as a failed secondary route response in the transaction log.
+
+### Troubleshooting — Filter
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| All events denied after setting IDs | `FACILITY_FILTER_IDS` has IDs but none match the incoming requests | Verify the IDs match what source systems send; check adaptor startup log shows correct count |
+| Facility ID `0234` rejected despite `0234` in YAML allowlist | YAML coerced unquoted `0234` to integer, stripping the leading zero | Quote all IDs in YAML: `ids: ["0234", "0030"]` — without quotes YAML parses `0234` as `234` |
+| Facility `Organization/1302` rejected despite `1302` in list | Source sent FHIR reference prefix — adaptor strips it automatically | Confirm you're on the latest image; verify adaptor startup log shows `Facility filter: active — N facility id(s) configured` |
+| Events with no `X-Facility-Id` and no FHIR location rejected | Stale behaviour from an old image | Resources with no resolvable facility ID always pass through; rebuild/redeploy with the latest image |
+| Facility filter not active despite `FACILITY_FILTER_IDS` set | Env var not passed to container | Check `docker inspect <container>` → `Env` section |
+
+## 8. Removing the Route
 
 To stop forwarding traffic to the CCE Emitter Adaptor:
 

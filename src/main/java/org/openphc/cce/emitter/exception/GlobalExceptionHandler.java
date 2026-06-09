@@ -32,6 +32,12 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    @ExceptionHandler(FacilityFilterRejectedException.class)
+    public ResponseEntity<Map<String, Object>> handleFacilityFilterRejectedException(FacilityFilterRejectedException ex) {
+        log.info("Facility filter rejected event: {}", ex.getMessage());
+        return buildErrorResponse(HttpStatus.FORBIDDEN, "FACILITY_FILTER_REJECTED", ex.getMessage());
+    }
+
     @ExceptionHandler(FhirMappingException.class)
     public ResponseEntity<Map<String, Object>> handleFhirMappingException(FhirMappingException ex) {
         log.warn("FHIR mapping error: {}", ex.getMessage());

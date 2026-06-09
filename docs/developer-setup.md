@@ -196,6 +196,9 @@ cce:
       client-secret:
   emitter:
     patient-identifier-system: "http://openphc.org/identifier/upid"
+    facility-filter:
+      ids: []             # FOSA IDs to allow — empty = all pass. Env var: FACILITY_FILTER_IDS (comma-separated).
+                          # Always quote IDs in YAML to preserve leading zeros: ["0234", "0030"]
     sources:
       ebuzima:
         client-id: ebuzima-emr-client  # OpenHIM client ID for eBUZIMA EMR

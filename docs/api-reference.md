@@ -201,11 +201,29 @@ Bundle resources (`"resourceType": "Bundle"`) are silently ignored — the adapt
 
 Error responses are wrapped in the OpenHIM mediator envelope with `"status": "Failed"`.
 
-### 4.1 Unrecognized Source (200 — Silently Ignored)
+### 4.1 Facility Filter Rejected (403)
+
+When `FACILITY_FILTER_IDS` is configured (non-empty) and the event's resolved facility ID is not in the allowlist, the adaptor returns `403 Forbidden` and does not forward to the Collector. Events with no resolvable facility ID (e.g. `Patient`, `Observation`) always pass through unconditionally.
+
+```json
+{
+  "error": {
+    "code": "FACILITY_FILTER_REJECTED",
+    "message": "Event rejected by facility filter: facilityId='9999' source='spice' reason=NOT_IN_ALLOWLIST"
+  },
+  "timestamp": "2026-06-08T11:45:50.388748661Z"
+}
+```
+
+Possible `reason` value: `NOT_IN_ALLOWLIST`. Events with no facility ID (e.g. `Patient`, `RelatedPerson`) are always forwarded and never reach the filter.
+
+> **Note:** Configure `ids` with bare ID values only (e.g. `0030`, `1302`). `FacilityIdExtractor` strips any `ResourceType/` prefix generically during extraction — both `Location/1302` and `Organization/1302` resolve to `1302` before reaching the filter.
+
+### 4.3 Unrecognized Source (200 — Silently Ignored)
 
 When no source adaptor matches the inbound request (no `X-OpenHIM-ClientID` or `X-Source-System` header matches any configured source), the adaptor silently ignores the request and returns a `200 OK` response. No error is raised. This is by design — the adaptor sits on a secondary route and receives all traffic on that OpenHIM channel; only matching requests are processed.
 
-### 4.2 Patient ID Not Found (400)
+### 4.4 Patient ID Not Found (400)
 
 ```json
 {
@@ -221,7 +239,7 @@ When no source adaptor matches the inbound request (no `X-OpenHIM-ClientID` or `
 }
 ```
 
-### 4.3 Internal Server Error (500)
+### 4.5 Internal Server Error (500)
 
 Caught by the global catch-all exception handler for any unexpected errors not covered by specific handlers.
 
@@ -239,7 +257,7 @@ Caught by the global catch-all exception handler for any unexpected errors not c
 }
 ```
 
-### 4.4 Collector Forwarding Failure (502)
+### 4.6 Collector Forwarding Failure (502)
 
 ```json
 {
@@ -306,6 +324,10 @@ cce_emitter_events_duplicate_total 2.0
 # TYPE cce_emitter_collector_latency_seconds summary
 cce_emitter_collector_latency_seconds_count 42.0
 cce_emitter_collector_latency_seconds_sum 8.456
+
+# HELP cce_emitter_events_filtered_total Events denied by facility filter
+# TYPE cce_emitter_events_filtered_total counter
+cce_emitter_events_filtered_total{source="spice",facility="9999",reason="NOT_IN_ALLOWLIST"} 3.0
 ```
 
 ---

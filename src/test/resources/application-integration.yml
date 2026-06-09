@@ -38,6 +38,8 @@ cce:
       token: test-token
   emitter:
     patient-identifier-system: "http://openphc.org/identifier/upid"
+    facility-filter:
+      ids: []   # integration tests run with filter inactive
     sources:
       ebuzima:
         client-id: ebuzima-emr-client

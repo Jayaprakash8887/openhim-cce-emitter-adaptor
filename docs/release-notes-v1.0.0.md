@@ -26,7 +26,8 @@ First production release of the **CCE Emitter Adaptor** — an OpenHIM mediator 
 | **Global Error Handling** | Catch-all exception handler returns structured 500 `INTERNAL_ERROR` responses for unexpected failures |
 | **OAuth2 Authentication** | Keycloak `client_credentials` token management for Collector auth (`CollectorTokenService`). Automatic caching and refresh. Falls back to static Bearer token for local dev. |
 | **OpenHIM Lifecycle** | Automatic registration on startup, periodic heartbeat, `application/json+openhim` response envelope |
-| **Observability** | Micrometer/Prometheus metrics (6 custom metrics), structured MDC logging (dev: human-readable, prod: JSON) |
+| **Facility Filter** | Config-driven facility allowlist (`cce.emitter.facility-filter.ids`). Empty list = all events pass; non-empty = only listed IDs admitted. Denied events return `403 Forbidden`. `FacilityIdExtractor` resolves facility ID from any FHIR resource location field (`Encounter.location`, `locationReference[]`, or direct `location` reference); any `ResourceType/` prefix stripped generically (`Location/1302` and `Organization/1302` both → `1302`). Resources with no location info pass through unconditionally. Controlled via `FACILITY_FILTER_IDS` env var. |
+| **Observability** | Micrometer/Prometheus metrics (7 custom metrics including `cce_emitter_events_filtered_total`), structured MDC logging (dev: human-readable, prod: JSON) |
 | **Health Probes** | Kubernetes-compatible liveness (`/actuator/health/liveness`) and readiness (`/actuator/health/readiness`) |
 
 ## 3. Known Limitations (v1.0)
@@ -111,6 +112,7 @@ docker run -d \
 | `CCE_COLLECTOR_RETRY_MAX_ATTEMPTS` | `3` | Max retry attempts on 5xx/timeout |
 | `CCE_COLLECTOR_RETRY_BACKOFF_MS` | `1000` | Initial backoff delay (doubles per retry) |
 | `MEDIATOR_ENDPOINT_HOST` | `emitter-adaptor` | Hostname registered with OpenHIM Core |
+| `FACILITY_FILTER_IDS` | — | Comma-separated FOSA facility IDs to allow (e.g. `"0030,0042,0099"`). Empty or unset = all events pass. |
 
 ## 7. OpenHIM Configuration (Manual Steps)
 
@@ -165,6 +167,7 @@ Scrape endpoint: `GET /actuator/prometheus`
 | `cce_emitter_events_rejected_total` | Counter | Events rejected by Collector (4xx) |
 | `cce_emitter_collector_latency_seconds` | Timer | Collector forwarding round-trip latency |
 | `cce_emitter_collector_retries_total` | Counter | Retry attempts exhausted |
+| `cce_emitter_events_filtered_total` | Counter | Events denied by facility filter (tags: `source`, `facility`, `reason`) |
 
 ### Logging
 

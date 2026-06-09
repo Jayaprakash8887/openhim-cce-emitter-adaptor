@@ -8,6 +8,7 @@ import org.openphc.cce.emitter.config.EmitterProperties.SourceProperties;
 import org.openphc.cce.emitter.fhir.FacilityIdExtractor;
 import org.openphc.cce.emitter.fhir.FhirResourceParser;
 import org.openphc.cce.emitter.fhir.PatientIdExtractor;
+import org.openphc.cce.emitter.filter.FacilityFilter;
 import org.openphc.cce.emitter.model.CloudEventDto;
 import org.openphc.cce.emitter.model.InboundRequest;
 import org.openphc.cce.emitter.model.SourceMetadata;
@@ -57,6 +58,7 @@ public class SourceAdaptorService {
     private final FhirResourceParser fhirResourceParser;
     private final PatientIdExtractor patientIdExtractor;
     private final FacilityIdExtractor facilityIdExtractor;
+    private final FacilityFilter facilityFilter;
     private final CloudEventEnvelopeBuilder cloudEventEnvelopeBuilder;
 
     public SourceAdaptorService(
@@ -64,11 +66,13 @@ public class SourceAdaptorService {
             FhirResourceParser fhirResourceParser,
             PatientIdExtractor patientIdExtractor,
             FacilityIdExtractor facilityIdExtractor,
+            FacilityFilter facilityFilter,
             CloudEventEnvelopeBuilder cloudEventEnvelopeBuilder) {
         this.sources = emitterProperties.sources() != null ? emitterProperties.sources() : Map.of();
         this.fhirResourceParser = fhirResourceParser;
         this.patientIdExtractor = patientIdExtractor;
         this.facilityIdExtractor = facilityIdExtractor;
+        this.facilityFilter = facilityFilter;
         this.cloudEventEnvelopeBuilder = cloudEventEnvelopeBuilder;
 
         if (sources.isEmpty()) {
@@ -164,6 +168,8 @@ public class SourceAdaptorService {
         // Build source metadata from headers, with FHIR location fallback for facility
         SourceMetadata metadata = buildSourceMetadata(request, sourceKey, resource);
 
+        // Facility filter — throws FacilityFilterRejectedException (→ 403) if denied
+        facilityFilter.enforceFilter(metadata.facilityId(), sourceKey);
         // Build CloudEvent
         CloudEventDto event = cloudEventEnvelopeBuilder.build(body, patientUpid, resourceType, metadata);
 

@@ -2,6 +2,7 @@ package org.openphc.cce.emitter.adaptor;
 
 import ca.uhn.fhir.context.FhirContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -10,11 +11,14 @@ import org.openphc.cce.emitter.cloudevents.CloudEventEnvelopeBuilder;
 import org.openphc.cce.emitter.cloudevents.EventIdGenerator;
 import org.openphc.cce.emitter.config.EmitterProperties;
 import org.openphc.cce.emitter.config.EmitterProperties.SourceProperties;
+import org.openphc.cce.emitter.exception.FacilityFilterRejectedException;
 import org.openphc.cce.emitter.exception.FhirMappingException;
 import org.openphc.cce.emitter.exception.PatientIdNotFoundException;
 import org.openphc.cce.emitter.fhir.FacilityIdExtractor;
 import org.openphc.cce.emitter.fhir.FhirResourceParser;
 import org.openphc.cce.emitter.fhir.PatientIdExtractor;
+import org.openphc.cce.emitter.filter.FacilityFilter;
+import org.openphc.cce.emitter.filter.FacilityFilterProperties;
 import org.openphc.cce.emitter.model.CloudEventDto;
 import org.openphc.cce.emitter.model.InboundRequest;
 import org.openphc.cce.emitter.model.SourceMetadata;
@@ -63,7 +67,8 @@ class SourceAdaptorServiceTest {
 
         service = new SourceAdaptorService(
                 emitterProperties,
-                fhirResourceParser, patientIdExtractor, facilityIdExtractor, envelopeBuilder);
+                fhirResourceParser, patientIdExtractor, facilityIdExtractor,
+                disabledFilter(), envelopeBuilder);
 
         encounterJson = loadFixture("ebuzima/fhir-encounter.json");
         observationJson = loadFixture("ebuzima/fhir-observation.json");
@@ -173,7 +178,8 @@ class SourceAdaptorServiceTest {
 
             multiService = new SourceAdaptorService(
                     emitterProperties,
-                    fhirResourceParser, patientIdExtractor, new FacilityIdExtractor(), envelopeBuilder);
+                    fhirResourceParser, patientIdExtractor, new FacilityIdExtractor(),
+                    disabledFilter(), envelopeBuilder);
             InboundRequest request = InboundRequest.from(
                     "{}", Map.of("X-OpenHIM-ClientID", "dhis2-client"), "/inbound");
 
@@ -215,7 +221,8 @@ class SourceAdaptorServiceTest {
             PatientIdExtractor patientIdExtractor = new PatientIdExtractor(emitterProperties);
             SourceAdaptorService emptyService = new SourceAdaptorService(
                     emitterProperties,
-                    fhirResourceParser, patientIdExtractor, new FacilityIdExtractor(), envelopeBuilder);
+                    fhirResourceParser, patientIdExtractor, new FacilityIdExtractor(),
+                    disabledFilter(), envelopeBuilder);
 
             InboundRequest request = InboundRequest.from(
                     "{}", Map.of("X-OpenHIM-ClientID", CLIENT_ID), "/inbound");
@@ -631,7 +638,75 @@ class SourceAdaptorServiceTest {
         }
     }
 
+    // ==================== adapt() — Facility filter ====================
+
+    @Nested
+    class FacilityFilterScenarios {
+
+        private SourceAdaptorService buildServiceWithFilter(FacilityFilter filter) {
+            FhirContext fhirContext = FhirContext.forR4();
+            FhirResourceParser parser = new FhirResourceParser(fhirContext);
+            ObjectMapper objectMapper = new ObjectMapper();
+            CloudEventEnvelopeBuilder envelopeBuilder =
+                    new CloudEventEnvelopeBuilder(new EventIdGenerator(), objectMapper);
+            EmitterProperties props = new EmitterProperties(
+                    Map.of(SOURCE_KEY, new SourceProperties(CLIENT_ID)),
+                    "http://openphc.org/identifier/upid");
+            return new SourceAdaptorService(props, parser,
+                    new PatientIdExtractor(props), new FacilityIdExtractor(),
+                    filter, envelopeBuilder);
+        }
+
+        private FacilityFilter filterWith(String... ids) {
+            return new FacilityFilter(
+                    new FacilityFilterProperties(List.of(ids)),
+                    new SimpleMeterRegistry());
+        }
+
+        @Test
+        void allowedFacility_producesSingleCloudEvent() {
+            SourceAdaptorService svc = buildServiceWithFilter(filterWith("0002"));
+            InboundRequest request = InboundRequest.from(
+                    encounterJson,
+                    Map.of("X-OpenHIM-ClientID", CLIENT_ID, "X-Facility-Id", "0002"),
+                    "/inbound");
+
+            assertThat(svc.adapt(request)).hasSize(1);
+        }
+
+        @Test
+        void facilityNotInAllowlist_throwsFacilityFilterRejectedException() {
+            SourceAdaptorService svc = buildServiceWithFilter(filterWith("0002"));
+            InboundRequest request = InboundRequest.from(
+                    encounterJson,
+                    Map.of("X-OpenHIM-ClientID", CLIENT_ID, "X-Facility-Id", "9999"),
+                    "/inbound");
+
+            assertThatThrownBy(() -> svc.adapt(request))
+                    .isInstanceOf(FacilityFilterRejectedException.class)
+                    .hasMessageContaining("NOT_IN_ALLOWLIST");
+        }
+
+        @Test
+        void missingFacilityId_passesThrough() {
+            // No X-Facility-Id header and no location in payload → facilityId is null → passes through
+            SourceAdaptorService svc = buildServiceWithFilter(filterWith("0002"));
+            InboundRequest request = InboundRequest.from(
+                    encounterJson,
+                    Map.of("X-OpenHIM-ClientID", CLIENT_ID),
+                    "/inbound");
+
+            assertThat(svc.adapt(request)).hasSize(1);
+        }
+    }
+
     // ==================== Helpers ====================
+
+    private static FacilityFilter disabledFilter() {
+        return new FacilityFilter(
+                new FacilityFilterProperties(List.of()),
+                new SimpleMeterRegistry());
+    }
 
     private InboundRequest buildRequest(String body) {
         return InboundRequest.from(

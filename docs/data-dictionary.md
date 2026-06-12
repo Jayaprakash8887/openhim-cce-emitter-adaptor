@@ -146,7 +146,7 @@ Prefix: `cce.emitter.facility-filter`
 |----------|------|---------|---------|-------------|
 | `cce.emitter.facility-filter.ids` | List\<String\> | `[]` | `FACILITY_FILTER_IDS` | FOSA facility IDs to allow. Empty list = filter inactive (all events pass). Non-empty = only listed IDs are admitted. Comma-separated in env var form (e.g. `"0030,0042,0099"`). **In YAML, always quote IDs** to preserve leading zeros and avoid integer coercion (e.g. `["0234", "0030"]` — without quotes YAML strips the leading zero). Whitespace trimmed. Stored as `Set<String>` for O(1) lookup. |
 
-**Denial behaviour:** Events with a facility ID that is not in the allowlist return `403 Forbidden` with error code `FACILITY_FILTER_REJECTED` (`reason`: `NOT_IN_ALLOWLIST`). Events with no facility ID are passed through unconditionally — only events that carry a resolved facility ID are subject to filtering. `FacilityIdExtractor` resolves the facility ID from `Encounter.location[0].location`, `locationReference[0]` (e.g. `ServiceRequest`), or a direct `location` reference (e.g. `Procedure`, `Immunization`); any `ResourceType/` prefix is stripped generically so both `Location/1302` and `Organization/1302` compare as `1302`. Resources with no location fields (e.g. `Patient`, `RelatedPerson`, `Observation`) resolve to `null` and always pass through.
+**Skip behaviour:** Events with a facility ID that is not in the allowlist return `200 OK` with `status: "skipped"` — they are not forwarded to the Collector and OpenHIM records the transaction as Completed. Events with no facility ID are passed through unconditionally — only events that carry a resolved facility ID are subject to filtering. `FacilityIdExtractor` resolves the facility ID from `Encounter.location[0].location`, `locationReference[0]` (e.g. `ServiceRequest`), or a direct `location` reference (e.g. `Procedure`, `Immunization`); any `ResourceType/` prefix is stripped generically so both `Location/1302` and `Organization/1302` compare as `1302`. Resources with no location fields (e.g. `Patient`, `RelatedPerson`, `Observation`) resolve to `null` and always pass through.
 
 ### 3.5 Server Properties
 
@@ -310,7 +310,7 @@ Registered in `InboundEventService` and `CollectorForwardingService` via constru
 | `cce.emitter.events.rejected` | Counter | — | `CollectorForwardingService` | Events rejected by Collector (4xx) |
 | `cce.emitter.collector.latency` | Timer | — | `CollectorForwardingService` | Collector forwarding round-trip latency |
 | `cce.emitter.collector.retries` | Counter | — | `CollectorForwardingService` | Retry attempts exhausted |
-| `cce.emitter.events.filtered` | Counter | `source`, `facility`, `reason` | `FacilityFilter` | Events denied by facility filter. `reason` value: `NOT_IN_ALLOWLIST`. |
+| `cce.emitter.events.filtered` | Counter | `source`, `facility`, `reason` | `FacilityFilter` | Events skipped by facility filter (not forwarded). `reason` value: `NOT_IN_ALLOWLIST`. |
 
 ## 8. MDC Context Fields
 

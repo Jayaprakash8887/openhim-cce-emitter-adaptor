@@ -16,7 +16,7 @@ All custom metrics are exposed at `GET /actuator/prometheus` and use the `cce_em
 | `cce_emitter_events_rejected_total` | Counter | — | Events rejected by Collector (4xx) |
 | `cce_emitter_collector_latency_seconds` | Timer | — | Collector forwarding round-trip latency (count, sum, max, percentiles) |
 | `cce_emitter_collector_retries_total` | Counter | — | Retry attempts exhausted (all retries failed) |
-| `cce_emitter_events_filtered_total` | Counter | `source`, `facility`, `reason` | Events denied by facility filter. `reason`: `NOT_IN_ALLOWLIST`. Events with no facility ID pass through and are not counted. |
+| `cce_emitter_events_filtered_total` | Counter | `source`, `facility`, `reason` | Events skipped by facility filter (not forwarded; response is 200 OK). `reason`: `NOT_IN_ALLOWLIST`. Events with no facility ID pass through and are not counted. |
 
 ### JVM & Spring Boot Metrics (auto-registered)
 
@@ -126,8 +126,8 @@ groups:
           service: cce-emitter-adaptor
         annotations:
           summary: "CCE Emitter facility filter denying >50% of events"
-          description: "More than 50% of events are being denied by the facility filter for >5 minutes. May indicate a misconfigured allowlist or missing facility IDs."
-          runbook: "Check FACILITY_FILTER_IDS env var. Use topk Prometheus query to identify which facilities are being denied. Verify source systems are sending X-Facility-Id header."
+          description: "More than 50% of events are being skipped by the facility filter for >5 minutes. May indicate a misconfigured allowlist or missing facility IDs."
+          runbook: "Check FACILITY_FILTER_IDS env var. Use topk Prometheus query to identify which facilities are being skipped. Verify source systems are sending X-Facility-Id header."
 
       # No events received for extended period (during business hours)
       - alert: CceEmitterNoEventsReceived

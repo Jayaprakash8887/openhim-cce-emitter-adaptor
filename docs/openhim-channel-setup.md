@@ -196,26 +196,24 @@ The facility filter restricts which events are forwarded to the CCE Collector ba
 4. Rolling restart; readiness probe drains old pods after new pods are ready.
 5. Filter is active. Verify in Grafana: new facilities produce 0 denials, previously filtered facilities now producing forwarded events.
 
-### Denial Behaviour
+### Skip Behaviour
 
-Events that do not pass the filter return `403 Forbidden` — they are **not** forwarded to the Collector:
+Events that do not pass the filter return `200 OK` with `status: "skipped"` — they are **not** forwarded to the Collector:
 
 ```json
 {
-  "error": {
-    "code": "FACILITY_FILTER_REJECTED",
-    "message": "Event rejected by facility filter: facilityId='9999' source='spice' reason=NOT_IN_ALLOWLIST"
-  }
+  "status": "skipped",
+  "message": "Event skipped by facility filter: facilityId='9999' source='spice'"
 }
 ```
 
-OpenHIM records this as a failed secondary route response in the transaction log.
+OpenHIM records this as a **Completed** transaction (not Failed), keeping the transaction log clean. The `cce.emitter.events.filtered.total` Micrometer counter still increments for observability.
 
 ### Troubleshooting — Filter
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| All events denied after setting IDs | `FACILITY_FILTER_IDS` has IDs but none match the incoming requests | Verify the IDs match what source systems send; check adaptor startup log shows correct count |
+| All events skipped after setting IDs | `FACILITY_FILTER_IDS` has IDs but none match the incoming requests | Verify the IDs match what source systems send; check adaptor startup log shows correct count |
 | Facility ID `0234` rejected despite `0234` in YAML allowlist | YAML coerced unquoted `0234` to integer, stripping the leading zero | Quote all IDs in YAML: `ids: ["0234", "0030"]` — without quotes YAML parses `0234` as `234` |
 | Facility `Organization/1302` rejected despite `1302` in list | Source sent FHIR reference prefix — adaptor strips it automatically | Confirm you're on the latest image; verify adaptor startup log shows `Facility filter: active — N facility id(s) configured` |
 | Events with no `X-Facility-Id` and no FHIR location rejected | Stale behaviour from an old image | Resources with no resolvable facility ID always pass through; rebuild/redeploy with the latest image |

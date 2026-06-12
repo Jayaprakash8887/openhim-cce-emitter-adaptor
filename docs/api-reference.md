@@ -201,21 +201,18 @@ Bundle resources (`"resourceType": "Bundle"`) are silently ignored — the adapt
 
 Error responses are wrapped in the OpenHIM mediator envelope with `"status": "Failed"`.
 
-### 4.1 Facility Filter Rejected (403)
+### 4.1 Facility Filter Skipped (200)
 
-When `FACILITY_FILTER_IDS` is configured (non-empty) and the event's resolved facility ID is not in the allowlist, the adaptor returns `403 Forbidden` and does not forward to the Collector. Events with no resolvable facility ID (e.g. `Patient`, `Observation`) always pass through unconditionally.
+When `FACILITY_FILTER_IDS` is configured (non-empty) and the event's resolved facility ID is not in the allowlist, the adaptor returns `200 OK` with `status: "skipped"` — the event is **not** forwarded to the Collector. OpenHIM records the transaction as **Completed** (not Failed). Events with no resolvable facility ID (e.g. `Patient`, `Observation`) always pass through unconditionally.
 
 ```json
 {
-  "error": {
-    "code": "FACILITY_FILTER_REJECTED",
-    "message": "Event rejected by facility filter: facilityId='9999' source='spice' reason=NOT_IN_ALLOWLIST"
-  },
-  "timestamp": "2026-06-08T11:45:50.388748661Z"
+  "status": "skipped",
+  "message": "Event skipped by facility filter: facilityId='9999' source='spice'"
 }
 ```
 
-Possible `reason` value: `NOT_IN_ALLOWLIST`. Events with no facility ID (e.g. `Patient`, `RelatedPerson`) are always forwarded and never reach the filter.
+Events with no facility ID (e.g. `Patient`, `RelatedPerson`) are always forwarded and never reach the filter.
 
 > **Note:** Configure `ids` with bare ID values only (e.g. `0030`, `1302`). `FacilityIdExtractor` strips any `ResourceType/` prefix generically during extraction — both `Location/1302` and `Organization/1302` resolve to `1302` before reaching the filter.
 

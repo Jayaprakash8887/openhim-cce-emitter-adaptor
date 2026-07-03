@@ -162,7 +162,12 @@ org.openphc.cce.emitter/
 │
 ├── fhir/                                          # FHIR utilities
 │   ├── FhirResourceParser.java                    #   HAPI FHIR parse (uses FhirContext.forR4())
+│   ├── FacilityIdExtractor.java                   #   Extract facility ID from any FHIR resource location field (Encounter, ServiceRequest, Procedure, Immunization, etc.)
 │   └── PatientIdExtractor.java                    #   Extract patient UPID from FHIR resources
+│
+├── filter/                                        # Facility filter
+│   ├── FacilityFilter.java                        #   Spring bean: enforceFilter() — throws on deny, increments counter
+│   └── FacilityFilterProperties.java              #   @ConfigurationProperties("cce.emitter.facility-filter")
 │
 ├── service/                                       # Business logic
 │   ├── InboundEventService.java                   #   Orchestrates pipeline: adapt → forward → wrap (+ metrics + MDC)
@@ -180,6 +185,7 @@ org.openphc.cce.emitter/
 ├── exception/                                     # Custom exceptions
 │   ├── FhirMappingException.java                  #   FHIR parsing failures → 422
 │   ├── PatientIdNotFoundException.java            #   Patient UPID not extractable → 400
+│   ├── FacilityFilterRejectedException.java       #   Facility filter denial → 403
 │   ├── CollectorForwardingException.java          #   Retryable Collector errors (5xx/timeout) → 502
 │   ├── CollectorClientException.java              #   Non-retryable Collector errors (4xx)
 │   └── GlobalExceptionHandler.java                #   @ControllerAdvice for consistent error responses
@@ -231,7 +237,7 @@ Single `@Component` that reads `cce.emitter.sources` config (sourceKey → clien
 | 1 | `InboundEventController` | Receives HTTP POST, creates `InboundRequest`, delegates to `InboundEventService`, serializes returned `OpenHimResponse` as `application/json+openhim` |
 | 2 | `InboundEventService.process()` | Orchestrates the full pipeline (steps 3–6), returns `OpenHimResponse` |
 | 3 | `SourceAdaptorService.resolveSource()` | Matches `X-OpenHIM-ClientID` / `X-Source-System` headers against configured sources |
-| 4 | `SourceAdaptorService.adapt()` | Parses FHIR resource, builds `List<CloudEventDto>` (Bundle resources are silently ignored) |
+| 4 | `SourceAdaptorService.adapt()` | Parses FHIR resource, resolves facility ID, applies facility filter (throws 403 on denial), builds `List<CloudEventDto>` |
 | 5 | `CollectorForwardingService.forward()` | POSTs each CloudEvent to Collector via `RestClient`; `@Retryable` on 5xx |
 | 6 | `OpenHimResponseWrapper.wrap()` | Wraps response + orchestration log in `application/json+openhim` format |
 
@@ -277,6 +283,7 @@ Errors are handled by `GlobalExceptionHandler` (`@ControllerAdvice`):
 | Scenario | Action | HTTP Status |
 |----------|--------|-------------|
 | Unknown source system | Log debug + silently ignore | 200 OK (no processing) |
+| Facility filter denied (facility not in configured list) | Log + reject | 403 with `FACILITY_FILTER_REJECTED` |
 | FHIR resource unparseable | Log + reject | 422 with `FHIR_MAPPING_ERROR` |
 | Patient UPID not extractable | Log + reject | 400 with `PATIENT_ID_NOT_FOUND` |
 | Collector returns 400 | Log + return error | 400 (non-retryable) |
@@ -303,7 +310,7 @@ Errors are handled by `GlobalExceptionHandler` (`@ControllerAdvice`):
 | **Liveness** | `/actuator/health/liveness` |
 | **Readiness** | `/actuator/health/readiness` |
 | **Metrics** | `/actuator/prometheus` |
-| **Key env vars** | `OPENHIM_CORE_HOST`, `CCE_COLLECTOR_URL`, `KEYCLOAK_HOST`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET`, `SPRING_PROFILES_ACTIVE` |
+| **Key env vars** | `OPENHIM_CORE_HOST`, `CCE_COLLECTOR_URL`, `KEYCLOAK_HOST`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET`, `FACILITY_FILTER_IDS`, `SPRING_PROFILES_ACTIVE` |
 
 ### Docker
 
@@ -341,6 +348,7 @@ Registered in `InboundEventService` and `CollectorForwardingService` via constru
 | `cce.emitter.events.rejected` | Counter | — | `CollectorForwardingService` | Events rejected by Collector (4xx) |
 | `cce.emitter.collector.latency` | Timer | — | `CollectorForwardingService` | Collector forwarding round-trip latency |
 | `cce.emitter.collector.retries` | Counter | — | `CollectorForwardingService` | Retry attempts exhausted |
+| `cce.emitter.events.filtered` | Counter | `source`, `facility`, `reason` | `FacilityFilter` | Events denied by facility filter (`reason`: `NOT_IN_ALLOWLIST`). Events with no facility ID pass through and are not counted. |
 
 ### Structured Logging (MDC)
 

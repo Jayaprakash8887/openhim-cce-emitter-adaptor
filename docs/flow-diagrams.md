@@ -69,6 +69,9 @@ sequenceDiagram
     activate Svc
     Svc->>Svc: resolveSource(request) → sourceKey
     Svc->>Svc: Parse FHIR resource (ignore if Bundle)
+    Svc->>Svc: buildSourceMetadata (resolve facilityId: header → FHIR fallback)
+    Svc->>Svc: FacilityFilter.enforceFilter(facilityId, sourceKey)
+    Note over Svc: 403 FACILITY_FILTER_REJECTED if denied
     Svc->>CE: build(fhirResource, patientUpid, type, metadata)
     CE-->>Svc: CloudEventDto
     Svc-->>EvtSvc: List<CloudEventDto>
@@ -220,7 +223,10 @@ flowchart TD
     F -->|Yes| H{Patient ID found?}
 
     H -->|No| I[PatientIdNotFoundException<br/>→ 400 PATIENT_ID_NOT_FOUND]
-    H -->|Yes| J{Collector accepts?}
+    H -->|Yes| FF{Facility filter pass?}
+
+    FF -->|No| FE[FacilityFilterRejectedException<br/>→ 403 FACILITY_FILTER_REJECTED]
+    FF -->|Yes| J{Collector accepts?}
 
     J -->|202 OK| K[Success → 202 with orchestrations]
     J -->|200 Dup| L[Duplicate → still 202]
@@ -231,6 +237,7 @@ flowchart TD
     AB --> P
     C --> O[OpenHimResponseWrapper<br/>wraps error in mediator envelope]
     E --> P
+    FE --> O
     G --> O
     I --> O
     K --> O
@@ -245,6 +252,7 @@ flowchart TD
     style L fill:#fff3e0
     style AB fill:#e3f2fd
     style E fill:#ffebee
+    style FE fill:#ffebee
     style G fill:#ffebee
     style I fill:#ffebee
     style N fill:#ffebee

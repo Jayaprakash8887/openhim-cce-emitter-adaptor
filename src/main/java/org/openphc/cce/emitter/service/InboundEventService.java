@@ -8,6 +8,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 
 import org.openphc.cce.emitter.adaptor.SourceAdaptorService;
 import org.openphc.cce.emitter.config.CollectorProperties;
+import org.openphc.cce.emitter.exception.FacilityFilterRejectedException;
 import org.openphc.cce.emitter.model.CloudEventDto;
 import org.openphc.cce.emitter.model.CollectorResponse;
 import org.openphc.cce.emitter.model.InboundRequest;
@@ -79,7 +80,18 @@ public class InboundEventService {
                 .register(meterRegistry).increment();
 
         // 1. Source resolution + FHIR → CloudEvent transformation
-        List<CloudEventDto> events = sourceAdaptorService.adapt(inboundRequest);
+        List<CloudEventDto> events;
+        try {
+            events = sourceAdaptorService.adapt(inboundRequest);
+        } catch (FacilityFilterRejectedException ex) {
+            // Facility not in allowlist — skip silently with 200 so OpenHIM marks the transaction Completed
+            log.info("Event skipped by facility filter: facilityId='{}' source='{}' reason={}",
+                    ex.getFacilityId(), ex.getSourceKey(), ex.getReason());
+            JsonNode responseBody = objectMapper.createObjectNode()
+                    .put("status", "skipped")
+                    .put("message", "Event skipped by facility filter: facilityId='" + ex.getFacilityId() + "' source='" + ex.getSourceKey() + "'");
+            return responseWrapper.wrap(responseBody, HttpStatus.OK, List.of());
+        }
 
         // 2. No events produced → silently ignore (200 OK)
         if (events.isEmpty()) {

@@ -25,7 +25,7 @@ openhim:
     scheme: https
     auth-type: basic
     username: root@openhim.org
-    password: openhim-password
+    password: 123456
   heartbeat:
     enabled: true
     interval-seconds: 10
@@ -47,6 +47,8 @@ cce:
       client-secret:
   emitter:
     patient-identifier-system: "http://openphc.org/identifier/upid"
+    facility-filter:
+      ids: []
     sources:
       ebuzima:
         client-id: ebuzima-emr-client

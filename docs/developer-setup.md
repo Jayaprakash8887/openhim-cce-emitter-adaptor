@@ -196,6 +196,8 @@ cce:
       client-secret:
   emitter:
     patient-identifier-system: "http://openphc.org/identifier/upid"
+    facility-filter:
+      ids: ${FACILITY_FILTER_IDS:}  # Set via env var: FACILITY_FILTER_IDS=0234,0030 (comma-separated, empty = all pass)
     sources:
       ebuzima:
         client-id: ebuzima-emr-client  # OpenHIM client ID for eBUZIMA EMR
@@ -381,9 +383,24 @@ services:
       - ./wiremock:/home/wiremock
     command: --verbose
 
+  # CCE Emitter Adaptor
+  openhim-cce-emitter-adaptor:
+    build: .
+    container_name: openhim-cce-emitter-adaptor
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SERVER_PORT=8081
+      - OPENHIM_CORE_HOST=openhim-core
+      - CCE_COLLECTOR_URL=http://host.docker.internal:8082
+      - FACILITY_FILTER_IDS=0234,0030   # comma-separated; empty or omit = filter inactive
+
 volumes:
   mongo-data:
 ```
+
+> **Facility filter tip:** `FACILITY_FILTER_IDS` is the only env var needed to control which facility IDs are admitted. Update it and do a rolling restart — no rebuild required. Skipped events return `200 OK` with `status: "skipped"` so OpenHIM marks the transaction as Completed.
 
 ### WireMock Stub for Collector
 

@@ -31,11 +31,16 @@ cce:
     auth:
       token: dev-token
   emitter:
+    patient-identifier-system: "http://openphc.org/identifier/upid"
+    facility-filter:
+      ids: ["0234", "abc-123"]   # empty = filter inactive; add IDs to restrict (e.g. ["1302", "0030"])
     sources:
       ebuzima:
         client-id: ebuzima-emr-client
       spice:
         client-id: spice-fhir-client
+      openmrs:
+        client-id: openmrs-fhir-client
 
 management:
   endpoints:

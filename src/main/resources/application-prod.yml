@@ -38,6 +38,9 @@ cce:
       client-id: ${KEYCLOAK_CLIENT_ID:}
       client-secret: ${KEYCLOAK_CLIENT_SECRET:}
   emitter:
+    patient-identifier-system: ${PATIENT_IDENTIFIER_SYSTEM:http://openphc.org/identifier/upid}
+    facility-filter:
+      ids: ${FACILITY_FILTER_IDS:}   # empty = filter inactive; comma-separated to restrict (e.g. "0234,abc-123")
     sources:
       ebuzima:
         client-id: ${EBUZIMA_CLIENT_ID}

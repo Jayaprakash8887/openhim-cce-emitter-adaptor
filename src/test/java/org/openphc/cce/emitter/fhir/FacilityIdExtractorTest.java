@@ -4,6 +4,7 @@ import ca.uhn.fhir.context.FhirContext;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.*;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -19,66 +20,230 @@ class FacilityIdExtractorTest {
         fhirContext = FhirContext.forR4();
     }
 
-    @Test
-    void extractsFromEncounterLocationReference() {
-        Encounter encounter = new Encounter();
-        encounter.addLocation()
-                .setLocation(new Reference("Location/0030"));
+    // ── Encounter ────────────────────────────────────────────────────────────
 
-        assertThat(extractor.extract(encounter)).isEqualTo("0030");
+    @Nested
+    class EncounterExtraction {
+
+        @Test
+        void extractsFromLocationPrefix() {
+            Encounter encounter = new Encounter();
+            encounter.addLocation().setLocation(new Reference("Location/0030"));
+
+            assertThat(extractor.extract(encounter)).isEqualTo("0030");
+        }
+
+        @Test
+        void extractsFromOrganizationPrefix() {
+            Encounter encounter = new Encounter();
+            encounter.addLocation().setLocation(new Reference("Organization/1302"));
+
+            assertThat(extractor.extract(encounter)).isEqualTo("1302");
+        }
+
+        @Test
+        void extractsFromIdentifierWhenNoReference() {
+            Encounter encounter = new Encounter();
+            Reference locationRef = new Reference();
+            locationRef.setIdentifier(new Identifier().setValue("Kacyiru Health Center"));
+            encounter.addLocation().setLocation(locationRef);
+
+            assertThat(extractor.extract(encounter)).isEqualTo("Kacyiru Health Center");
+        }
+
+        @Test
+        void prefersReferenceOverIdentifier() {
+            Encounter encounter = new Encounter();
+            Reference locationRef = new Reference("Location/0030");
+            locationRef.setIdentifier(new Identifier().setValue("Kacyiru Health Center"));
+            encounter.addLocation().setLocation(locationRef);
+
+            assertThat(extractor.extract(encounter)).isEqualTo("0030");
+        }
+
+        @Test
+        void returnsNullWhenLocationListEmpty() {
+            assertThat(extractor.extract(new Encounter())).isNull();
+        }
+
+        @Test
+        void extractsFromParsedPayload() {
+            String json = """
+                    {
+                      "resourceType": "Encounter",
+                      "id": "809cd034-f2d8-44d0-a95e-f42c44305afa",
+                      "status": "in-progress",
+                      "class": {"system": "http://terminology.hl7.org/CodeSystem/v3-ActCode", "code": "AMB"},
+                      "subject": {"reference": "Patient/240717-SITE-7293"},
+                      "location": [{"location": {"reference": "Location/0030", "type": "Location",
+                        "identifier": {"value": "Kacyiru Health Center"}, "display": "Kacyiru Health Center"}}]
+                    }
+                    """;
+            IBaseResource resource = fhirContext.newJsonParser().parseResource(json);
+            assertThat(extractor.extract(resource)).isEqualTo("0030");
+        }
     }
 
-    @Test
-    void extractsFromEncounterLocationIdentifier() {
-        Encounter encounter = new Encounter();
-        Reference locationRef = new Reference();
-        locationRef.setIdentifier(new Identifier().setValue("Kacyiru Health Center"));
-        encounter.addLocation().setLocation(locationRef);
+    // ── ServiceRequest (locationReference[]) ─────────────────────────────────
 
-        assertThat(extractor.extract(encounter)).isEqualTo("Kacyiru Health Center");
+    @Nested
+    class ServiceRequestExtraction {
+
+        @Test
+        void extractsWithLocationPrefix() {
+            ServiceRequest sr = new ServiceRequest();
+            sr.addLocationReference(new Reference("Location/1302"));
+
+            assertThat(extractor.extract(sr)).isEqualTo("1302");
+        }
+
+        @Test
+        void extractsWithOrganizationPrefix() {
+            ServiceRequest sr = new ServiceRequest();
+            sr.addLocationReference(new Reference("Organization/1302"));
+
+            assertThat(extractor.extract(sr)).isEqualTo("1302");
+        }
+
+        @Test
+        void extractsFromIdentifierWhenNoReference() {
+            ServiceRequest sr = new ServiceRequest();
+            Reference locationRef = new Reference();
+            locationRef.setIdentifier(new Identifier().setValue("1302"));
+            sr.addLocationReference(locationRef);
+
+            assertThat(extractor.extract(sr)).isEqualTo("1302");
+        }
+
+        @Test
+        void usesFirstEntryWhenMultipleLocations() {
+            ServiceRequest sr = new ServiceRequest();
+            sr.addLocationReference(new Reference("Location/1302"));
+            sr.addLocationReference(new Reference("Location/9999"));
+
+            assertThat(extractor.extract(sr)).isEqualTo("1302");
+        }
+
+        @Test
+        void returnsNullWhenLocationReferenceAbsent() {
+            assertThat(extractor.extract(new ServiceRequest())).isNull();
+        }
+
+        @Test
+        void extractsFromParsedPayload() {
+            String json = """
+                    {
+                      "resourceType": "ServiceRequest",
+                      "id": "503723",
+                      "status": "active",
+                      "intent": "order",
+                      "subject": {"reference": "Patient/123"},
+                      "locationReference": [{"reference": "Location/1302", "display": "NCD Upazila"}]
+                    }
+                    """;
+            IBaseResource resource = fhirContext.newJsonParser().parseResource(json);
+            assertThat(extractor.extract(resource)).isEqualTo("1302");
+        }
+
+        @Test
+        void extractsFromParsedPayloadWithOrganizationPrefix() {
+            String json = """
+                    {
+                      "resourceType": "ServiceRequest",
+                      "id": "503723",
+                      "status": "active",
+                      "intent": "order",
+                      "subject": {"reference": "Patient/123"},
+                      "locationReference": [{"reference": "Organization/1302", "display": "NCD Upazila"}]
+                    }
+                    """;
+            IBaseResource resource = fhirContext.newJsonParser().parseResource(json);
+            assertThat(extractor.extract(resource)).isEqualTo("1302");
+        }
     }
 
-    @Test
-    void prefersReferenceOverIdentifier() {
-        Encounter encounter = new Encounter();
-        Reference locationRef = new Reference("Location/0030");
-        locationRef.setIdentifier(new Identifier().setValue("Kacyiru Health Center"));
-        encounter.addLocation().setLocation(locationRef);
+    // ── Procedure (direct location Reference) ────────────────────────────────
 
-        assertThat(extractor.extract(encounter)).isEqualTo("0030");
+    @Nested
+    class ProcedureExtraction {
+
+        @Test
+        void extractsWithLocationPrefix() {
+            Procedure procedure = new Procedure();
+            procedure.setLocation(new Reference("Location/0030"));
+
+            assertThat(extractor.extract(procedure)).isEqualTo("0030");
+        }
+
+        @Test
+        void extractsWithOrganizationPrefix() {
+            Procedure procedure = new Procedure();
+            procedure.setLocation(new Reference("Organization/1302"));
+
+            assertThat(extractor.extract(procedure)).isEqualTo("1302");
+        }
+
+        @Test
+        void returnsNullWhenLocationAbsent() {
+            assertThat(extractor.extract(new Procedure())).isNull();
+        }
     }
 
-    @Test
-    void returnsNullForEncounterWithoutLocation() {
-        Encounter encounter = new Encounter();
-        assertThat(extractor.extract(encounter)).isNull();
+    // ── Immunization (direct location Reference) ──────────────────────────────
+
+    @Nested
+    class ImmunizationExtraction {
+
+        @Test
+        void extractsWithLocationPrefix() {
+            Immunization immunization = new Immunization();
+            immunization.setLocation(new Reference("Location/0030"));
+
+            assertThat(extractor.extract(immunization)).isEqualTo("0030");
+        }
+
+        @Test
+        void extractsWithOrganizationPrefix() {
+            Immunization immunization = new Immunization();
+            immunization.setLocation(new Reference("Organization/1302"));
+
+            assertThat(extractor.extract(immunization)).isEqualTo("1302");
+        }
+
+        @Test
+        void returnsNullWhenLocationAbsent() {
+            assertThat(extractor.extract(new Immunization())).isNull();
+        }
     }
 
-    @Test
-    void returnsNullForNonEncounterResource() {
-        Observation observation = new Observation();
-        assertThat(extractor.extract(observation)).isNull();
-    }
+    // ── Resources with no location fields (always pass through) ──────────────
 
-    @Test
-    void returnsNullForNullResource() {
-        assertThat(extractor.extract(null)).isNull();
-    }
+    @Nested
+    class NoLocationResources {
 
-    @Test
-    void extractsFromParsedEbuzimaPayload() {
-        String json = """
-                {
-                  "resourceType": "Encounter",
-                  "id": "809cd034-f2d8-44d0-a95e-f42c44305afa",
-                  "status": "in-progress",
-                  "class": {"system": "http://terminology.hl7.org/CodeSystem/v3-ActCode", "code": "AMB"},
-                  "subject": {"reference": "Patient/240717-SITE-7293"},
-                  "location": [{"location": {"reference": "Location/0030", "type": "Location",
-                    "identifier": {"value": "Kacyiru Health Center"}, "display": "Kacyiru Health Center"}}]
-                }
-                """;
-        IBaseResource resource = fhirContext.newJsonParser().parseResource(json);
-        assertThat(extractor.extract(resource)).isEqualTo("0030");
+        @Test
+        void returnsNullForObservation() {
+            assertThat(extractor.extract(new Observation())).isNull();
+        }
+
+        @Test
+        void returnsNullForPatient() {
+            assertThat(extractor.extract(new Patient())).isNull();
+        }
+
+        @Test
+        void returnsNullForRelatedPerson() {
+            assertThat(extractor.extract(new RelatedPerson())).isNull();
+        }
+
+        @Test
+        void returnsNullForCondition() {
+            assertThat(extractor.extract(new Condition())).isNull();
+        }
+
+        @Test
+        void returnsNullForNullInput() {
+            assertThat(extractor.extract(null)).isNull();
+        }
     }
 }

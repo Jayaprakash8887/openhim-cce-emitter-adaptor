@@ -246,4 +246,81 @@ class FacilityIdExtractorTest {
             assertThat(extractor.extract(null)).isNull();
         }
     }
+
+    // ── source-facility extension (fallback for all resource types) ──────────
+
+    @Nested
+    class SourceFacilityExtension {
+
+        private static final String URL = "http://example.org/fhir/StructureDefinition/source-facility";
+
+        @Test
+        void extractsFromObservationExtension() {
+            Observation observation = new Observation();
+            observation.addExtension(new Extension(URL, new StringType("0007")));
+
+            assertThat(extractor.extract(observation)).isEqualTo("0007");
+        }
+
+        @Test
+        void extractsFromConditionExtension() {
+            Condition condition = new Condition();
+            condition.addExtension(new Extension(URL, new StringType("0518")));
+
+            assertThat(extractor.extract(condition)).isEqualTo("0518");
+        }
+
+        @Test
+        void extractsFromMedicationRequestExtension() {
+            MedicationRequest medicationRequest = new MedicationRequest();
+            medicationRequest.addExtension(new Extension(URL, new StringType("2980")));
+
+            assertThat(extractor.extract(medicationRequest)).isEqualTo("2980");
+        }
+
+        @Test
+        void locationTakesPrecedenceOverExtension() {
+            // A resource carrying both a FHIR location and the extension: location wins.
+            ServiceRequest sr = new ServiceRequest();
+            sr.addLocationReference(new Reference("Location/1302"));
+            sr.addExtension(new Extension(URL, new StringType("9999")));
+
+            assertThat(extractor.extract(sr)).isEqualTo("1302");
+        }
+
+        @Test
+        void ignoresOtherExtensions() {
+            Observation observation = new Observation();
+            observation.addExtension(new Extension(
+                    "http://example.org/fhir/StructureDefinition/source-system", new StringType("eBuzima")));
+
+            assertThat(extractor.extract(observation)).isNull();
+        }
+
+        @Test
+        void returnsNullWhenExtensionValueBlank() {
+            Observation observation = new Observation();
+            observation.addExtension(new Extension(URL, new StringType("")));
+
+            assertThat(extractor.extract(observation)).isNull();
+        }
+
+        @Test
+        void extractsFromParsedConditionPayload() {
+            String json = """
+                    {
+                      "resourceType": "Condition",
+                      "id": "a7ba628f-e994-4eb5-adf6-43fa173b7555",
+                      "subject": {"reference": "Patient/221104-0004-9742"},
+                      "encounter": {"reference": "Encounter/74722465-f4fc-4f8c-8c38-c8ef8b2fba51"},
+                      "extension": [
+                        {"url": "http://example.org/fhir/StructureDefinition/source-system", "valueString": "eBuzima"},
+                        {"url": "http://example.org/fhir/StructureDefinition/source-facility", "valueString": "0007"}
+                      ]
+                    }
+                    """;
+            IBaseResource resource = fhirContext.newJsonParser().parseResource(json);
+            assertThat(extractor.extract(resource)).isEqualTo("0007");
+        }
+    }
 }

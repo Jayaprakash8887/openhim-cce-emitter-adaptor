@@ -36,6 +36,7 @@ replay_pid*
 # === Project-specific (not tracked in PR #1) ===
 artifacts/
 bin/
-
+.claude/
 
 load-test/
+scripts/

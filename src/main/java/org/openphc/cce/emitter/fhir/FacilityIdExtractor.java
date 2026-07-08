@@ -1,7 +1,9 @@
 package org.openphc.cce.emitter.fhir;
 
 import org.hl7.fhir.instance.model.api.IBaseResource;
+import org.hl7.fhir.r4.model.DomainResource;
 import org.hl7.fhir.r4.model.Encounter;
+import org.hl7.fhir.r4.model.Extension;
 import org.hl7.fhir.r4.model.Reference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,18 +21,27 @@ import java.util.List;
  *   <li>{@code Encounter.location[0].location} — nested component, handled explicitly</li>
  *   <li>{@code getLocationReference()} returning {@code List<Reference>} — e.g. {@code ServiceRequest}</li>
  *   <li>{@code getLocation()} returning a direct {@code Reference} — e.g. {@code Procedure}, {@code Immunization}</li>
+ *   <li>{@code source-facility} extension — fallback carried by every resource type
+ *       (e.g. {@code Observation}, {@code Condition}, {@code MedicationRequest}) that has no FHIR location</li>
  * </ol>
  *
  * <p>Any {@code ResourceType/id} prefix (e.g. {@code Location/0030}, {@code Organization/1302})
  * is stripped generically — the bare ID after the last {@code /} is used for filter comparison.
  *
- * <p>Returns {@code null} if the resource carries no location information — such events
- * pass through the facility filter unconditionally.
+ * <p>Returns {@code null} only when the resource carries neither location information nor a
+ * {@code source-facility} extension — such events pass through the facility filter unconditionally.
  */
 @Component
 public class FacilityIdExtractor {
 
     private static final Logger log = LoggerFactory.getLogger(FacilityIdExtractor.class);
+
+    /**
+     * URL suffix of the source system's facility extension. The full URL is
+     * {@code http://example.org/fhir/StructureDefinition/source-facility}; matching on the
+     * suffix keeps extraction working if the source-system base URL ever changes.
+     */
+    private static final String SOURCE_FACILITY_EXTENSION_SUFFIX = "source-facility";
 
     /**
      * Extracts the facility ID from the given FHIR R4 resource.
@@ -42,10 +53,12 @@ public class FacilityIdExtractor {
      *       first entry's reference is used</li>
      *   <li>Any resource with a direct {@code location} {@link Reference}
      *       (e.g. {@code Procedure}, {@code Immunization})</li>
+     *   <li>Fallback for all resource types: the {@code source-facility} extension
+     *       (e.g. {@code Observation}, {@code Condition}, {@code MedicationRequest})</li>
      * </ol>
      *
-     * <p>Resources that carry no location information (e.g. {@code Patient},
-     * {@code RelatedPerson}, {@code Observation}) return {@code null}, causing the
+     * <p>Returns {@code null} only when the resource carries neither location information nor a
+     * {@code source-facility} extension (e.g. {@code Patient}, {@code RelatedPerson}), causing the
      * event to pass through the facility filter unconditionally.
      *
      * @param resource the parsed FHIR R4 resource; may be any type
@@ -56,20 +69,30 @@ public class FacilityIdExtractor {
             return null;
         }
 
+        // 1. Location-based extraction.
         // Encounter.location[] holds EncounterLocationComponent (not a plain Reference),
         // so it needs explicit handling rather than the generic reflection path below.
+        String facilityId;
         if (resource instanceof Encounter encounter) {
-            return extractFromEncounter(encounter);
+            facilityId = extractFromEncounter(encounter);
+        } else {
+            // Try locationReference[] (e.g. ServiceRequest) then location (e.g. Procedure, Immunization)
+            // Both List<Reference> and direct Reference shapes are handled by the same reflective helper.
+            Reference locationRef = resolveLocationReference(resource, "getLocationReference");
+            if (locationRef == null) {
+                locationRef = resolveLocationReference(resource, "getLocation");
+            }
+            facilityId = locationRef != null ? extractId(locationRef, resource.fhirType()) : null;
         }
 
-        // Try locationReference[] (e.g. ServiceRequest) then location (e.g. Procedure, Immunization)
-        // Both List<Reference> and direct Reference shapes are handled by the same reflective helper.
-        Reference locationRef = resolveLocationReference(resource, "getLocationReference");
-        if (locationRef == null) {
-            locationRef = resolveLocationReference(resource, "getLocation");
+        // 2. Fallback: the source system's 'source-facility' extension, carried by every
+        // resource type (Observation, Condition, MedicationRequest, ...) — including those
+        // that have no FHIR location, which is why they previously resolved no facility.
+        if (facilityId == null) {
+            facilityId = extractFromSourceFacilityExtension(resource);
         }
 
-        return locationRef != null ? extractId(locationRef, resource.fhirType()) : null;
+        return facilityId;
     }
 
     /**
@@ -93,6 +116,39 @@ public class FacilityIdExtractor {
         }
 
         return extractId(locationRef, "Encounter");
+    }
+
+    /**
+     * Extracts the facility ID from the source system's {@code source-facility} extension,
+     * which every resource type carries regardless of whether it has a FHIR location:
+     * <pre>{@code
+     * "extension": [{ "url": ".../source-facility", "valueString": "0007" }]
+     * }</pre>
+     * → returns {@code "0007"}.
+     *
+     * <p>This is the fallback that gives a facility to resources with no FHIR {@code location}
+     * (e.g. {@code Observation}, {@code Condition}, {@code MedicationRequest}).
+     *
+     * @param resource the parsed FHIR R4 resource
+     * @return the facility ID from the extension, or {@code null} if it is absent or empty
+     */
+    private String extractFromSourceFacilityExtension(IBaseResource resource) {
+        if (!(resource instanceof DomainResource domainResource)) {
+            return null;
+        }
+
+        for (Extension extension : domainResource.getExtension()) {
+            String url = extension.getUrl();
+            if (url != null && url.endsWith(SOURCE_FACILITY_EXTENSION_SUFFIX) && extension.hasValue()) {
+                String facilityId = extension.getValue().primitiveValue();
+                if (facilityId != null && !facilityId.isBlank()) {
+                    log.debug("Extracted facility ID '{}' from {} source-facility extension", facilityId, resource.fhirType());
+                    return facilityId;
+                }
+            }
+        }
+
+        return null;
     }
 
     /**

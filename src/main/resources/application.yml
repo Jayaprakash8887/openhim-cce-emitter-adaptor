@@ -47,6 +47,10 @@ cce:
       client-secret:
   emitter:
     patient-identifier-system: "http://openphc.org/identifier/upid"
+    redaction:
+      enabled: true          # strip clinical findings before forwarding to the collector
+      # remove-fields / remove-paths fall back to the defaults in
+      # ClinicalDataRedactionProperties when unset.
     facility-filter:
       ids: []
     sources:

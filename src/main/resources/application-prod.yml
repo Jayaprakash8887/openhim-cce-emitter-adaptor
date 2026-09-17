@@ -39,6 +39,10 @@ cce:
       client-secret: ${KEYCLOAK_CLIENT_SECRET:}
   emitter:
     patient-identifier-system: ${PATIENT_IDENTIFIER_SYSTEM:http://openphc.org/identifier/upid}
+    redaction:
+      enabled: ${REDACTION_ENABLED:true}       # false = forward full clinical payloads
+      remove-fields: ${REDACTION_REMOVE_FIELDS:}  # comma-separated; empty = built-in defaults
+      remove-paths: ${REDACTION_REMOVE_PATHS:}    # comma-separated; empty = built-in defaults
     facility-filter:
       ids: ${FACILITY_FILTER_IDS:}   # empty = filter inactive; comma-separated to restrict (e.g. "0234,abc-123")
     sources:

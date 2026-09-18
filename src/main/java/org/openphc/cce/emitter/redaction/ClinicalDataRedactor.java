@@ -178,10 +178,14 @@ public class ClinicalDataRedactor {
 
         static CompiledPath parse(String raw) {
             List<PathElement> elements = new ArrayList<>();
+            // A raw entry like "code.coding[].display" becomes three PathElements: "code",
+            // "coding" (array-typed), "display" — split purely on the dots.
             for (String part : raw.split("\\.")) {
                 String fieldName = part.trim();
                 boolean array = fieldName.endsWith(ARRAY_MARKER);
                 if (array) {
+                    // Strip the "[]" marker itself; it is a flag on the element, not part of the
+                    // field name used to look the value up in the actual JSON.
                     fieldName = fieldName.substring(0, fieldName.length() - ARRAY_MARKER.length()).trim();
                 }
                 elements.add(new PathElement(fieldName, array));
@@ -196,16 +200,25 @@ public class ClinicalDataRedactor {
          * @return {@code true} if the field existed anywhere along the path and was removed
          */
         boolean removeFrom(ObjectNode root, String resourceType, MismatchReporter onMismatch) {
+            // "objects" is the current frontier of the walk: every JSON object the path has
+            // reached so far. It starts as just the resource root and, at every array-typed
+            // element, fans out to hold one entry per array item — so by the time the loop below
+            // finishes, it may hold many objects even though the path started at a single root.
             List<ObjectNode> objects = List.of(root);
 
+            // Walk every element except the last: those are the steps that lead *to* the field
+            // being removed, not the field itself.
             List<PathElement> parentElements = elements.subList(0, elements.size() - 1);
             for (PathElement pathElement : parentElements) {
                 objects = descendInto(objects, pathElement, resourceType, onMismatch);
                 if (objects.isEmpty()) {
+                    // Nothing in the payload matched this element (e.g. an optional FHIR field
+                    // that this resource doesn't carry) — not an error, just nothing to remove.
                     return false;
                 }
             }
 
+            // Whatever the walk reached, remove the final segment's field from all of it.
             return removeFieldFrom(objects);
         }
 
@@ -219,17 +232,26 @@ public class ClinicalDataRedactor {
                                              String resourceType, MismatchReporter onMismatch) {
             List<ObjectNode> childObjects = new ArrayList<>();
 
+            // For every object currently in the frontier, look up this element's field and
+            // decide how to fold whatever is found there back into the next frontier.
             for (ObjectNode object : objects) {
                 JsonNode value = object.get(pathElement.fieldName());
                 if (value == null) {
+                    // This object simply doesn't have the field — skip it, don't fail the walk.
                     continue;
                 }
                 if (value.isArray()) {
                     if (!pathElement.array()) {
+                        // The configured path expected a single object here (no "[]"), but the
+                        // data is an array. Descending into it anyway would silently redact
+                        // nothing and look successful, so this is reported instead of ignored —
                         // The silent-no-op case this class exists to catch.
                         onMismatch.report(raw, pathElement.fieldName(), resourceType);
                         continue;
                     }
+                    // Array-typed element: fan out — every object item in the array becomes a
+                    // separate entry in the next frontier, so the rest of the path is applied to
+                    // each one independently (e.g. every "coding" entry gets its own removal).
                     for (JsonNode item : value) {
                         if (item.isObject()) {
                             childObjects.add((ObjectNode) item);
@@ -240,6 +262,8 @@ public class ClinicalDataRedactor {
                     // a cardinality-many element arrives as an array or a lone object.
                     childObjects.add((ObjectNode) value);
                 }
+                // Anything else (a scalar, null node, missing) is neither an object nor an array
+                // to descend into, so it's silently left out of the next frontier.
             }
 
             return childObjects;
@@ -249,6 +273,9 @@ public class ClinicalDataRedactor {
         private boolean removeFieldFrom(List<ObjectNode> objects) {
             String leafField = elements.get(elements.size() - 1).fieldName();
             boolean removed = false;
+            // "removed" tracks whether the field existed *anywhere* the path reached — a path
+            // that fanned out across ten array items but only found the field on three of them
+            // still counts as having done its job.
             for (ObjectNode object : objects) {
                 if (object.has(leafField)) {
                     object.remove(leafField);

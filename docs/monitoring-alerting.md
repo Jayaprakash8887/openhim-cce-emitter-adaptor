@@ -17,6 +17,7 @@ All custom metrics are exposed at `GET /actuator/prometheus` and use the `cce_em
 | `cce_emitter_collector_latency_seconds` | Timer | — | Collector forwarding round-trip latency (count, sum, max, percentiles) |
 | `cce_emitter_collector_retries_total` | Counter | — | Retry attempts exhausted (all retries failed) |
 | `cce_emitter_events_filtered_total` | Counter | `source`, `facility`, `reason` | Events skipped by facility filter (not forwarded; response is 200 OK). `reason`: `NOT_IN_ALLOWLIST`. Events with no facility ID pass through and are not counted. |
+| `cce_emitter_events_redacted_total` | Counter | `resource_type` | Events from which at least one clinical field was removed before forwarding (once per event, not per field). |
 
 ### JVM & Spring Boot Metrics (auto-registered)
 
@@ -128,6 +129,21 @@ groups:
           summary: "CCE Emitter facility filter denying >50% of events"
           description: "More than 50% of events are being skipped by the facility filter for >5 minutes. May indicate a misconfigured allowlist or missing facility IDs."
           runbook: "Check FACILITY_FILTER_IDS env var. Use topk Prometheus query to identify which facilities are being skipped. Verify source systems are sending X-Facility-Id header."
+
+      # Clinical-data redaction has stopped taking effect.
+      # This is a compliance control, not a performance one: if it silently stops firing while
+      # events keep arriving, clinical findings are being persisted downstream again.
+      - alert: CceEmitterRedactionNotApplied
+        expr: increase(cce_emitter_events_received_total[30m]) > 0
+              and increase(cce_emitter_events_redacted_total[30m]) == 0
+        for: 30m
+        labels:
+          severity: critical
+          service: cce-emitter-adaptor
+        annotations:
+          summary: "CCE Emitter is forwarding events without redacting clinical data"
+          description: "Events are being received but no clinical fields have been removed for 30 minutes. Clinical findings may now be persisting in inbound_event_log, compliance_event_log and ClickHouse."
+          runbook: "Check REDACTION_ENABLED (must be true) and the startup log line 'Clinical-data redaction ACTIVE'. If redaction is on, the inbound payload shape may have changed — compare a live payload against the field list in docs/data-dictionary.md §3.6."
 
       # No events received for extended period (during business hours)
       - alert: CceEmitterNoEventsReceived

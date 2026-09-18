@@ -6,13 +6,18 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 
+import org.openphc.cce.emitter.redaction.ClinicalDataRedactionProperties.ResourceRule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Strips clinical findings from a FHIR resource before it leaves the adaptor.
@@ -20,14 +25,19 @@ import java.util.Set;
  * <p>Applied at the last step of the inbound pipeline — after the patient UPID, facility ID and
  * clinical timestamp have already been extracted from the complete resource — so redaction cannot
  * affect routing, facility attribution or SLA timing. What leaves the adaptor, and therefore what
- * the collector persists in {@code inbound_event_log}, is the minimised payload.
+ * is persisted in {@code inbound_event_log}, Kafka, {@code compliance_event_log} and the ClickHouse
+ * mirror, is the minimised payload.
+ *
+ * <p>Which fields are removed depends on the resource type, because the same element carries very
+ * different sensitivity per resource — see {@link ClinicalDataRedactionProperties}.
  *
  * <p>Redaction is deliberately shallow: root-level fields plus a small set of explicit nested
- * paths. It is not a recursive scrub, because a recursive one would also strip the {@code coding}
- * and {@code display} elements that protocol matching and the dashboard depend on.
+ * paths. A recursive scrub would also strip the {@code valueString} inside {@code extension[]},
+ * which is how {@code source-facility} attribution works, and the {@code coding}/{@code display}
+ * elements protocol matching and the dashboard depend on.
  *
- * <p>The result stays structurally valid FHIR R4. This matters: the collector re-parses every
- * payload with HAPI and rejects anything malformed as {@code INVALID_FHIR}.
+ * <p>The result stays structurally valid FHIR R4 — the collector re-parses every payload with HAPI
+ * and rejects anything malformed as {@code INVALID_FHIR}.
  */
 @Component
 public class ClinicalDataRedactor {
@@ -35,7 +45,9 @@ public class ClinicalDataRedactor {
     private static final Logger log = LoggerFactory.getLogger(ClinicalDataRedactor.class);
 
     private final boolean enabled;
-    private final Set<String> removeFields;
+    /** resourceType → fields to remove. Includes the {@code *} fallback entry. */
+    private final Map<String, Set<String>> fieldsByResourceType;
+    private final Set<String> fallbackFields;
     private final List<String[]> removePaths;
     private final MeterRegistry meterRegistry;
 
@@ -43,27 +55,39 @@ public class ClinicalDataRedactor {
         this.enabled = Boolean.TRUE.equals(properties.enabled());
         this.meterRegistry = meterRegistry;
 
-        this.removeFields = properties.removeFields().stream()
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        this.fieldsByResourceType = new LinkedHashMap<>();
+        for (ResourceRule rule : properties.rules()) {
+            if (rule == null || rule.resourceType() == null || rule.fields() == null) {
+                continue;
+            }
+            fieldsByResourceType.put(
+                    rule.resourceType().trim(),
+                    rule.fields().stream()
+                            .map(String::trim)
+                            .filter(f -> !f.isEmpty())
+                            .collect(Collectors.toCollection(LinkedHashSet::new)));
+        }
+        this.fallbackFields = fieldsByResourceType.getOrDefault(
+                ClinicalDataRedactionProperties.ANY_RESOURCE_TYPE, Set.of());
 
         this.removePaths = properties.removePaths().stream()
                 .map(String::trim)
-                .filter(s -> !s.isEmpty())
+                .filter(p -> !p.isEmpty())
                 .map(p -> p.split("\\."))
                 .toList();
 
         if (enabled) {
-            log.info("Clinical-data redaction ACTIVE — {} root field(s), {} nested path(s) will be stripped",
-                    removeFields.size(), removePaths.size());
+            log.info("Clinical-data redaction ACTIVE — rules for {} resource type(s) [{}], {} nested path(s)",
+                    fieldsByResourceType.size(),
+                    String.join(", ", fieldsByResourceType.keySet()),
+                    removePaths.size());
         } else {
             log.warn("Clinical-data redaction DISABLED — full clinical payloads will be forwarded to the collector");
         }
     }
 
     /**
-     * Returns the resource with clinical content removed.
+     * Returns the resource with clinical content removed, per the rule for its resource type.
      *
      * @param data the parsed FHIR resource destined for the CloudEvent {@code data} field
      * @return the same node, mutated in place; returned for call-site readability
@@ -74,10 +98,12 @@ public class ClinicalDataRedactor {
         }
 
         ObjectNode resource = (ObjectNode) data;
-        String resourceType = resource.path("resourceType").asText("unknown");
-        List<String> removed = new java.util.ArrayList<>();
+        String resourceType = resource.path("resourceType").asText("");
+        Set<String> fields = fieldsByResourceType.getOrDefault(resourceType, fallbackFields);
 
-        for (String field : removeFields) {
+        List<String> removed = new ArrayList<>();
+
+        for (String field : fields) {
             if (resource.has(field)) {
                 resource.remove(field);
                 removed.add(field);
@@ -93,7 +119,7 @@ public class ClinicalDataRedactor {
         if (!removed.isEmpty()) {
             Counter.builder("cce.emitter.events.redacted.total")
                     .description("Inbound events from which clinical fields were removed")
-                    .tag("resource_type", resourceType)
+                    .tag("resource_type", resourceType.isEmpty() ? "unknown" : resourceType)
                     .register(meterRegistry)
                     .increment();
             // Field NAMES only — never their values, which are the clinical data itself.

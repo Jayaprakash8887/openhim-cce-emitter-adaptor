@@ -48,9 +48,117 @@ cce:
   emitter:
     patient-identifier-system: "http://openphc.org/identifier/upid"
     redaction:
-      enabled: true          # strip clinical findings before forwarding to the collector
-      # remove-fields / remove-paths fall back to the defaults in
-      # ClinicalDataRedactionProperties when unset.
+      # Clinical-data minimisation. CCE records THAT a clinical step happened — never
+      # WHAT the finding was. Rules are per resourceType because the same element differs
+      # in sensitivity: `code` is the diagnosis on Condition but the observation TYPE on
+      # Observation (which protocol triggers match on, so it is kept there).
+      # Full rationale: docs/data-dictionary.md §3.6
+      enabled: true
+      # Patient name. subject.reference / patient.reference (the UPID) are preserved.
+      remove-paths: [subject.display, patient.display]
+      rules:
+        # code KEPT — it is the observation TYPE (LOINC) and protocol triggers match on it
+        - resource-type: Observation
+          fields: >-
+            valueQuantity, valueCodeableConcept, valueString, valueBoolean, valueInteger, valueRange,
+            valueRatio, valueSampledData, valueTime, valueDateTime, valuePeriod, valueAttachment, note, text,
+            interpretation, dataAbsentReason, bodySite, method, specimen, referenceRange, contained, severity,
+            stage, evidence, dosageInstruction, reasonCode, reasonReference, orderDetail, patientInstruction,
+            component
+        # type/class/serviceType/hospitalization/location KEPT — drive matching + referral KPI
+        - resource-type: Encounter
+          fields: >-
+            valueQuantity, valueCodeableConcept, valueString, valueBoolean, valueInteger, valueRange,
+            valueRatio, valueSampledData, valueTime, valueDateTime, valuePeriod, valueAttachment, note, text,
+            interpretation, dataAbsentReason, bodySite, method, specimen, referenceRange, contained, severity,
+            stage, evidence, dosageInstruction, reasonCode, reasonReference, orderDetail, patientInstruction,
+            diagnosis
+        # code = the test ordered; category KEPT (identifies a laboratory order)
+        - resource-type: ServiceRequest
+          fields: >-
+            valueQuantity, valueCodeableConcept, valueString, valueBoolean, valueInteger, valueRange,
+            valueRatio, valueSampledData, valueTime, valueDateTime, valuePeriod, valueAttachment, note, text,
+            interpretation, dataAbsentReason, bodySite, method, specimen, referenceRange, contained, severity,
+            stage, evidence, dosageInstruction, reasonCode, reasonReference, orderDetail, patientInstruction,
+            code
+        # the drug, quantity and refills; intent + authoredOn KEPT
+        - resource-type: MedicationRequest
+          fields: >-
+            valueQuantity, valueCodeableConcept, valueString, valueBoolean, valueInteger, valueRange,
+            valueRatio, valueSampledData, valueTime, valueDateTime, valuePeriod, valueAttachment, note, text,
+            interpretation, dataAbsentReason, bodySite, method, specimen, referenceRange, contained, severity,
+            stage, evidence, dosageInstruction, reasonCode, reasonReference, orderDetail, patientInstruction,
+            medicationCodeableConcept, medicationReference, dispenseRequest
+        # code = the diagnosis; clinicalStatus/verificationStatus KEPT (trigger keys)
+        - resource-type: Condition
+          fields: >-
+            valueQuantity, valueCodeableConcept, valueString, valueBoolean, valueInteger, valueRange,
+            valueRatio, valueSampledData, valueTime, valueDateTime, valuePeriod, valueAttachment, note, text,
+            interpretation, dataAbsentReason, bodySite, method, specimen, referenceRange, contained, severity,
+            stage, evidence, dosageInstruction, reasonCode, reasonReference, orderDetail, patientInstruction,
+            code
+        # the drug and amount; whenHandedOver KEPT (clinical time)
+        - resource-type: MedicationDispense
+          fields: >-
+            valueQuantity, valueCodeableConcept, valueString, valueBoolean, valueInteger, valueRange,
+            valueRatio, valueSampledData, valueTime, valueDateTime, valuePeriod, valueAttachment, note, text,
+            interpretation, dataAbsentReason, bodySite, method, specimen, referenceRange, contained, severity,
+            stage, evidence, dosageInstruction, reasonCode, reasonReference, orderDetail, patientInstruction,
+            medicationCodeableConcept, medicationReference, quantity
+        # no clinical finding — category/scope/status are consent metadata and are KEPT
+        - resource-type: Consent
+          fields: >-
+            valueQuantity, valueCodeableConcept, valueString, valueBoolean, valueInteger, valueRange,
+            valueRatio, valueSampledData, valueTime, valueDateTime, valuePeriod, valueAttachment, note, text,
+            interpretation, dataAbsentReason, bodySite, method, specimen, referenceRange, contained, severity,
+            stage, evidence, dosageInstruction, reasonCode, reasonReference, orderDetail, patientInstruction
+        # code = the procedure performed; performedDateTime/location KEPT
+        - resource-type: Procedure
+          fields: >-
+            valueQuantity, valueCodeableConcept, valueString, valueBoolean, valueInteger, valueRange,
+            valueRatio, valueSampledData, valueTime, valueDateTime, valuePeriod, valueAttachment, note, text,
+            interpretation, dataAbsentReason, bodySite, method, specimen, referenceRange, contained, severity,
+            stage, evidence, dosageInstruction, reasonCode, reasonReference, orderDetail, patientInstruction,
+            code, outcome, complication
+        # the drug and amount given
+        - resource-type: MedicationAdministration
+          fields: >-
+            valueQuantity, valueCodeableConcept, valueString, valueBoolean, valueInteger, valueRange,
+            valueRatio, valueSampledData, valueTime, valueDateTime, valuePeriod, valueAttachment, note, text,
+            interpretation, dataAbsentReason, bodySite, method, specimen, referenceRange, contained, severity,
+            stage, evidence, dosageInstruction, reasonCode, reasonReference, orderDetail, patientInstruction,
+            medicationCodeableConcept, medicationReference, dosage, supportingInformation
+        # code = the allergen
+        - resource-type: AllergyIntolerance
+          fields: >-
+            valueQuantity, valueCodeableConcept, valueString, valueBoolean, valueInteger, valueRange,
+            valueRatio, valueSampledData, valueTime, valueDateTime, valuePeriod, valueAttachment, note, text,
+            interpretation, dataAbsentReason, bodySite, method, specimen, referenceRange, contained, severity,
+            stage, evidence, dosageInstruction, reasonCode, reasonReference, orderDetail, patientInstruction,
+            code, reaction
+        # the radiology findings (conclusion is free-text from the radiologist)
+        - resource-type: ImagingStudy
+          fields: >-
+            valueQuantity, valueCodeableConcept, valueString, valueBoolean, valueInteger, valueRange,
+            valueRatio, valueSampledData, valueTime, valueDateTime, valuePeriod, valueAttachment, note, text,
+            interpretation, dataAbsentReason, bodySite, method, specimen, referenceRange, contained, severity,
+            stage, evidence, dosageInstruction, reasonCode, reasonReference, orderDetail, patientInstruction,
+            conclusion, conclusionCode, description, procedureCode, series, modality
+        # vaccineCode = the vaccine given. Not yet received — pre-declared
+        - resource-type: Immunization
+          fields: >-
+            valueQuantity, valueCodeableConcept, valueString, valueBoolean, valueInteger, valueRange,
+            valueRatio, valueSampledData, valueTime, valueDateTime, valuePeriod, valueAttachment, note, text,
+            interpretation, dataAbsentReason, bodySite, method, specimen, referenceRange, contained, severity,
+            stage, evidence, dosageInstruction, reasonCode, reasonReference, orderDetail, patientInstruction,
+            vaccineCode
+        # fallback for any type without its own rule; leaves code alone (may be structural)
+        - resource-type: "*"
+          fields: >-
+            valueQuantity, valueCodeableConcept, valueString, valueBoolean, valueInteger, valueRange,
+            valueRatio, valueSampledData, valueTime, valueDateTime, valuePeriod, valueAttachment, note, text,
+            interpretation, dataAbsentReason, bodySite, method, specimen, referenceRange, contained, severity,
+            stage, evidence, dosageInstruction, reasonCode, reasonReference, orderDetail, patientInstruction
     facility-filter:
       ids: []
     sources:

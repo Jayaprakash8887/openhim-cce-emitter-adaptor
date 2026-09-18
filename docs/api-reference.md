@@ -325,6 +325,11 @@ cce_emitter_collector_latency_seconds_sum 8.456
 # HELP cce_emitter_events_filtered_total Events denied by facility filter
 # TYPE cce_emitter_events_filtered_total counter
 cce_emitter_events_filtered_total{source="spice",facility="9999",reason="NOT_IN_ALLOWLIST"} 3.0
+
+# HELP cce_emitter_events_redacted_total Inbound events from which clinical fields were removed
+# TYPE cce_emitter_events_redacted_total counter
+cce_emitter_events_redacted_total{resource_type="Observation"} 128.0
+cce_emitter_events_redacted_total{resource_type="Condition"} 14.0
 ```
 
 ---

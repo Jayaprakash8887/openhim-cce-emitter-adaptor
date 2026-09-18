@@ -330,6 +330,10 @@ cce_emitter_events_filtered_total{source="spice",facility="9999",reason="NOT_IN_
 # TYPE cce_emitter_events_redacted_total counter
 cce_emitter_events_redacted_total{resource_type="Observation"} 128.0
 cce_emitter_events_redacted_total{resource_type="Condition"} 14.0
+
+# HELP cce_emitter_redaction_path_mismatch_total Configured redaction paths that matched nothing because an array was found where an object was expected (add '[]' to the segment)
+# TYPE cce_emitter_redaction_path_mismatch_total counter
+cce_emitter_redaction_path_mismatch_total{resource_type="AllergyIntolerance",path="reaction.manifestation"} 0.0
 ```
 
 ---

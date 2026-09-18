@@ -129,6 +129,48 @@ class RedactionConfigBindingTest {
     }
 
     @Test
+    @DisplayName("type-scoped nested paths bind, and stay scoped to their own type")
+    void typeScopedPathsBind() {
+        ClinicalDataRedactionProperties.ResourceRule encounter = properties.rules().stream()
+                .filter(r -> "Encounter".equals(r.resourceType()))
+                .findFirst().orElseThrow();
+
+        assertThat(encounter.removePaths())
+                .as("hospitalization is kept for facility attribution, so its clinical child "
+                        + "must be stripped by a nested path")
+                .contains("hospitalization.dischargeDisposition");
+
+        // The same path must not be global, or it would apply to every resource type
+        assertThat(properties.removePaths()).doesNotContain("hospitalization.dischargeDisposition");
+    }
+
+    @Test
+    @DisplayName("no configured path omits [] where the FHIR element is a repeating one")
+    void configuredPathsDeclareArraysCorrectly() {
+        // FHIR elements with cardinality 0..* that appear in our configured paths. A path
+        // traversing one of these without '[]' silently redacts nothing.
+        List<String> repeatingElements = List.of(
+                "reaction", "component", "series", "instance", "extension", "performer",
+                "category", "type", "location", "participant", "identifier", "coding");
+
+        List<String> allPaths = new java.util.ArrayList<>(properties.removePaths());
+        properties.rules().forEach(r -> allPaths.addAll(r.removePaths()));
+
+        for (String path : allPaths) {
+            String[] segments = path.split("\\.");
+            for (int i = 0; i < segments.length - 1; i++) {   // leaf is removed by name, so exempt
+                String segment = segments[i];
+                if (repeatingElements.contains(segment)) {
+                    assertThat(segment)
+                            .as("path '%s' traverses repeating element '%s' without '[]' — "
+                                    + "it would redact nothing", path, segment)
+                            .isEqualTo(segment + "[]");
+                }
+            }
+        }
+    }
+
+    @Test
     @DisplayName("the shipped YAML redacts a real Condition end to end")
     void shippedConfigRedactsARealCondition() throws IOException {
         ClinicalDataRedactor redactor = new ClinicalDataRedactor(properties, new SimpleMeterRegistry());

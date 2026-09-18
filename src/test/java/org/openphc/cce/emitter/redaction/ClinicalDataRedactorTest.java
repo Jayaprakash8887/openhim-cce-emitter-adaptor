@@ -260,7 +260,7 @@ class ClinicalDataRedactorTest {
     void honoursCustomRules() throws Exception {
         ClinicalDataRedactor custom = new ClinicalDataRedactor(
                 new ClinicalDataRedactionProperties(true, List.of(),
-                        List.of(new ClinicalDataRedactionProperties.ResourceRule("Observation", List.of("status")))),
+                        List.of(ClinicalDataRedactionProperties.ResourceRule.of("Observation", List.of("status")))),
                 new SimpleMeterRegistry());
         JsonNode out = custom.redact(mapper.readTree(
                 """

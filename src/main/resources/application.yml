@@ -54,7 +54,14 @@ cce:
       # Observation (which protocol triggers match on, so it is kept there).
       # Full rationale: docs/data-dictionary.md §3.6
       enabled: true
-      # Patient name. subject.reference / patient.reference (the UPID) are preserved.
+      # Nested paths applied to EVERY resource type. Patient name only — subject.reference /
+      # patient.reference (the UPID) are preserved, since that is how CCE keys the patient.
+      # Type-specific nested content belongs on the rule below, not here.
+      #
+      # Path syntax: dot-delimited, and a segment ending in `[]` steps through an array and
+      # applies to every element, e.g. `reaction[].manifestation`. The `[]` is REQUIRED where
+      # the data is an array; without it the path matches nothing. That is not silent —
+      # the adaptor logs a warning and increments cce.emitter.redaction.path.mismatch.total.
       remove-paths: [subject.display, patient.display]
       rules:
         # code KEPT — it is the observation TYPE (LOINC) and protocol triggers match on it
@@ -66,6 +73,8 @@ cce:
             stage, evidence, dosageInstruction, reasonCode, reasonReference, orderDetail, patientInstruction,
             component
         # type/class/serviceType/hospitalization/location KEPT — drive matching + referral KPI
+        # hospitalization is kept for facility attribution (hospitalization.origin), so its
+        # clinical child is stripped by a type-scoped path instead of a root field
         - resource-type: Encounter
           fields: >-
             valueQuantity, valueCodeableConcept, valueString, valueBoolean, valueInteger, valueRange,
@@ -73,6 +82,7 @@ cce:
             interpretation, dataAbsentReason, bodySite, method, specimen, referenceRange, contained, severity,
             stage, evidence, dosageInstruction, reasonCode, reasonReference, orderDetail, patientInstruction,
             diagnosis
+          remove-paths: [hospitalization.dischargeDisposition]
         # code = the test ordered; category KEPT (identifies a laboratory order)
         - resource-type: ServiceRequest
           fields: >-

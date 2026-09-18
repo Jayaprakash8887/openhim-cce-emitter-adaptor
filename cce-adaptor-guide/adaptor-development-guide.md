@@ -252,21 +252,55 @@ match on it, so removing it stops compliance tracking working. Remove the `value
 | `performer`, `requester`, `asserter`, `participant` | Practitioner shown in the dashboard |
 | `encounter` | Links steps within one visit |
 
-#### Two traps
+#### Reaching nested content
+
+Most findings sit at the resource root. Where one is nested inside a structure you must keep,
+use an explicit path rather than widening the root list. Scope it to the resource type — a global
+path applies to every type, which is rarely what you mean:
+
+```yaml
+- resource-type: Encounter
+  fields: >-
+    ... diagnosis
+  # hospitalization is KEPT (hospitalization.origin is a facility source),
+  # but its discharge outcome is clinical
+  remove-paths: [hospitalization.dischargeDisposition]
+```
+
+Make an array step explicit — `reaction[].manifestation`, not `reaction.manifestation`. A path that
+walks into an array without the marker matches nothing.
+
+Prefer removing a **whole array** at the root over pathing into it: `component` on `Observation`
+drops every sub-observation's `value[x]` in one step. Reach for a path only when part of the
+structure must survive.
+
+#### Three traps
 
 1. **Do not write a recursive scrub.** Removing `valueString` everywhere also removes it from
    `extension[]`, which is how `source-facility` attribution works, and strips the `coding`/`display`
    elements the dashboard renders. Remove named fields at the **resource root** plus a short list of
    explicit nested paths — nothing deeper.
-2. **The result must still be valid FHIR.** When `datacontenttype` is `application/fhir+json` the
+2. **A path that matches nothing must not fail quietly.** This is the worst failure mode in the
+   whole control: the config looks right, no error appears, and clinical data keeps flowing. Whoever
+   added the path believes the issue is closed. Detect the mismatch at runtime, log a warning naming
+   the path *and its corrected form*, and increment a counter you can alert on.
+3. **The result must still be valid FHIR.** When `datacontenttype` is `application/fhir+json` the
    Collector re-parses the body with HAPI and rejects malformed payloads as `INVALID_FHIR`. Removing
    optional elements is safe; do not remove `resourceType`.
 
 #### Make it configurable and observable
 
 Drive the field lists from configuration rather than hard-coding them, so a rule can be adjusted
-without a rebuild. Emit a counter each time an event is redacted (see §10) and alert if events keep
-arriving while that counter stops incrementing — that is how you detect redaction silently breaking.
+without a rebuild — and put the *full* list in the config file, not just a master switch. A rule that
+lives only in code cannot be audited by the people who have to sign it off.
+
+Emit a counter each time an event is redacted (see §10) and alert if events keep arriving while that
+counter stops incrementing — that is how you detect redaction silently breaking.
+
+Then test the **shipped configuration**, not just the redaction code. A unit test proves the engine
+honours the rules it is handed; it says nothing about the rules you actually deploy. Bind the real
+config file in a test and assert on what comes out. Verify that test can fail — break a rule
+deliberately and confirm it goes red.
 
 Never log the values you strip. Log field **names** only.
 
@@ -466,6 +500,7 @@ Match the reference adaptor's conventions so dashboards and alerts stay uniform 
 | `cce.emitter.collector.latency` | Timer | Forwarding round-trip latency |
 | `cce.emitter.collector.retries` | Counter | Retry exhaustion |
 | `cce.emitter.events.redacted.total` | Counter (`resource_type`) | Events with clinical fields removed (§5.6). Alert if events keep arriving while this stops incrementing — that means redaction has silently stopped. |
+| `cce.emitter.redaction.path.mismatch.total` | Counter (`resource_type`, `path`) | A configured nested path matched nothing — it is redacting nothing. Alert on non-zero. |
 
 Logging: structured (JSON in prod), with `correlationId`, `source`, `eventType`, `subject` in the logging context (MDC or equivalent) on every per-event log line. Expose `/actuator/health/liveness`, `/actuator/health/readiness` (or equivalents) and a Prometheus scrape endpoint.
 

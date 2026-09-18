@@ -171,7 +171,8 @@ org.openphc.cce.emitter/
 │
 ├── redaction/                                     # Clinical data minimisation
 │   ├── ClinicalDataRedactor.java                  #   Strips clinical findings + patient name from the outbound payload
-│   └── ClinicalDataRedactionProperties.java       #   @ConfigurationProperties("cce.emitter.redaction")
+│   │                                              #   Root fields + nested paths ([] steps through arrays); reports paths matching nothing
+│   └── ClinicalDataRedactionProperties.java       #   @ConfigurationProperties("cce.emitter.redaction") — per-resourceType rules
 │
 ├── service/                                       # Business logic
 │   ├── InboundEventService.java                   #   Orchestrates pipeline: adapt → forward → wrap (+ metrics + MDC)
@@ -307,7 +308,7 @@ Errors are handled by `GlobalExceptionHandler` (`@ControllerAdvice`):
 | **Mediator → OpenHIM Core API** | Basic auth (`root@openhim.org` / password) for registration + heartbeat |
 | **Mediator → CCE Collector** | OAuth2 client credentials via Keycloak (`CollectorTokenService`). Fetches and caches access tokens automatically. Falls back to static Bearer token (`cce.collector.auth.token`) when Keycloak is not configured. Emitter authenticates independently with the CCE Gateway (separate trust boundary from inbound OpenHIM auth). |
 | **TLS** | HTTPS connections configurable via Spring Boot `server.ssl.*` properties |
-| **Clinical data minimisation** | `ClinicalDataRedactor` strips clinical findings and the patient's name (`subject.display` / `patient.display`) from every payload before it is forwarded. Rules are **per resource type**, because the same element differs in sensitivity: `code` is the diagnosis on `Condition`, the allergen on `AllergyIntolerance` and the test ordered on `ServiceRequest` (all removed), but the observation *type* on `Observation` (kept — protocol triggers match on it). All 10 resource types seen in production have an explicit rule. CCE never persists what the clinical finding was — only that the step occurred, for which patient (UPID), at which facility, and when. Controlled by `cce.emitter.redaction.*`; see §3.6 of the [Data Dictionary](data-dictionary.md). Redaction log lines record field **names** only, never their values. |
+| **Clinical data minimisation** | `ClinicalDataRedactor` strips clinical findings and the patient's name (`subject.display` / `patient.display`) from every payload before it is forwarded. Rules are **per resource type**, because the same element differs in sensitivity: `code` is the diagnosis on `Condition`, the allergen on `AllergyIntolerance` and the test ordered on `ServiceRequest` (all removed), but the observation *type* on `Observation` (kept — protocol triggers match on it). All 10 resource types seen in production have an explicit rule. CCE never persists what the clinical finding was — only that the step occurred, for which patient (UPID), at which facility, and when. Controlled by `cce.emitter.redaction.*`; see §3.6 of the [Data Dictionary](data-dictionary.md). Redaction log lines record field **names** only, never their values. | Nested content inside structures that must be kept (e.g. `Encounter.hospitalization.dischargeDisposition`) is removed by type-scoped paths.
 
 ## 12. Deployment
 
@@ -358,6 +359,7 @@ Registered in `InboundEventService` and `CollectorForwardingService` via constru
 | `cce.emitter.collector.retries` | Counter | — | `CollectorForwardingService` | Retry attempts exhausted |
 | `cce.emitter.events.filtered` | Counter | `source`, `facility`, `reason` | `FacilityFilter` | Events denied by facility filter (`reason`: `NOT_IN_ALLOWLIST`). Events with no facility ID pass through and are not counted. |
 | `cce.emitter.events.redacted.total` | Counter | `resource_type` | `ClinicalDataRedactor` | Events from which at least one clinical field was removed (once per event, not per field) |
+| `cce.emitter.redaction.path.mismatch.total` | Counter | `resource_type`, `path` | `ClinicalDataRedactor` | A configured nested redaction path matched nothing — that path is redacting nothing |
 
 ### Structured Logging (MDC)
 

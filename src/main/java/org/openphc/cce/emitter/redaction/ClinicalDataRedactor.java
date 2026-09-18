@@ -12,7 +12,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -56,7 +55,7 @@ public class ClinicalDataRedactor {
 
     private static final Logger log = LoggerFactory.getLogger(ClinicalDataRedactor.class);
 
-    /** Marks a path segment that steps through an array, e.g. {@code reaction[]}. */
+    /** Marks a path element that steps through an array, e.g. {@code reaction[]}. */
     private static final String ARRAY_MARKER = "[]";
 
     private final boolean enabled;
@@ -154,88 +153,105 @@ public class ClinicalDataRedactor {
      * path expected an object. The path is redacting nothing, so this is a configuration defect: it
      * is surfaced as a metric and a one-off warning rather than being silently skipped.
      */
-    private void reportMismatch(String rawPath, String segment, String resourceType) {
+    private void reportMismatch(String rawPath, String element, String resourceType) {
         Counter.builder("cce.emitter.redaction.path.mismatch.total")
                 .description("Configured redaction paths that matched nothing because an array was "
-                        + "found where an object was expected (add '[]' to the segment)")
+                        + "found where an object was expected (add '[]' to the element)")
                 .tag("resource_type", resourceType.isEmpty() ? "unknown" : resourceType)
                 .tag("path", rawPath)
                 .register(meterRegistry)
                 .increment();
 
         if (reportedMismatches.add(resourceType + "|" + rawPath)) {
-            log.warn("Redaction path '{}' does not match {} payloads: segment '{}' is an array, "
+            log.warn("Redaction path '{}' does not match {} payloads: element '{}' is an array, "
                             + "but the path expects an object. NOTHING IS BEING REDACTED for this "
                             + "path — did you mean '{}[]'?",
-                    rawPath, resourceType, segment, segment);
+                    rawPath, resourceType, element, element);
         }
     }
 
-    /** A {@code remove-paths} entry parsed into steps, so the walk is not re-parsed per event. */
-    private record CompiledPath(String raw, List<Segment> segments) {
+    /** A {@code remove-paths} entry parsed into elements, so the walk is not re-parsed per event. */
+    private record CompiledPath(String raw, List<PathElement> elements) {
 
-        private record Segment(String name, boolean array) {}
+        /** One dot-delimited part of a path, e.g. {@code coding} or, with the {@code []} marker, {@code coding[]}. */
+        private record PathElement(String fieldName, boolean array) {}
 
         static CompiledPath parse(String raw) {
-            List<Segment> segments = new ArrayList<>();
+            List<PathElement> elements = new ArrayList<>();
             for (String part : raw.split("\\.")) {
-                String name = part.trim();
-                boolean array = name.endsWith(ARRAY_MARKER);
+                String fieldName = part.trim();
+                boolean array = fieldName.endsWith(ARRAY_MARKER);
                 if (array) {
-                    name = name.substring(0, name.length() - ARRAY_MARKER.length()).trim();
+                    fieldName = fieldName.substring(0, fieldName.length() - ARRAY_MARKER.length()).trim();
                 }
-                segments.add(new Segment(name, array));
+                elements.add(new PathElement(fieldName, array));
             }
-            return new CompiledPath(raw, List.copyOf(segments));
+            return new CompiledPath(raw, List.copyOf(elements));
         }
 
         /**
          * Removes the leaf field everywhere this path reaches.
          *
-         * @param onMismatch called when a segment expected an object but found an array
+         * @param onMismatch called when a path element expected an object but found an array
          * @return {@code true} if the field existed anywhere along the path and was removed
          */
         boolean removeFrom(ObjectNode root, String resourceType, MismatchReporter onMismatch) {
-            List<ObjectNode> cursors = List.of(root);
+            List<ObjectNode> objects = List.of(root);
 
-            for (int i = 0; i < segments.size() - 1; i++) {
-                Segment segment = segments.get(i);
-                List<ObjectNode> next = new ArrayList<>();
-
-                for (ObjectNode cursor : cursors) {
-                    JsonNode child = cursor.get(segment.name());
-                    if (child == null) {
-                        continue;
-                    }
-                    if (child.isArray()) {
-                        if (!segment.array()) {
-                            // The silent-no-op case this class exists to catch.
-                            onMismatch.report(raw, segment.name(), resourceType);
-                            continue;
-                        }
-                        for (JsonNode element : child) {
-                            if (element.isObject()) {
-                                next.add((ObjectNode) element);
-                            }
-                        }
-                    } else if (child.isObject()) {
-                        // A [] marker on a single object is tolerated: FHIR sources vary on whether
-                        // a cardinality-many element arrives as an array or a lone object.
-                        next.add((ObjectNode) child);
-                    }
-                }
-
-                if (next.isEmpty()) {
+            List<PathElement> parentElements = elements.subList(0, elements.size() - 1);
+            for (PathElement pathElement : parentElements) {
+                objects = descendInto(objects, pathElement, resourceType, onMismatch);
+                if (objects.isEmpty()) {
                     return false;
                 }
-                cursors = Collections.unmodifiableList(next);
             }
 
-            String leaf = segments.get(segments.size() - 1).name();
+            return removeFieldFrom(objects);
+        }
+
+        /**
+         * Reads one path element's field from every object reached so far, fanning out across
+         * every item of an array when the path element is array-typed ({@code []}).
+         *
+         * @return the objects found at this path element; empty if none of {@code objects} had the field
+         */
+        private List<ObjectNode> descendInto(List<ObjectNode> objects, PathElement pathElement,
+                                             String resourceType, MismatchReporter onMismatch) {
+            List<ObjectNode> childObjects = new ArrayList<>();
+
+            for (ObjectNode object : objects) {
+                JsonNode value = object.get(pathElement.fieldName());
+                if (value == null) {
+                    continue;
+                }
+                if (value.isArray()) {
+                    if (!pathElement.array()) {
+                        // The silent-no-op case this class exists to catch.
+                        onMismatch.report(raw, pathElement.fieldName(), resourceType);
+                        continue;
+                    }
+                    for (JsonNode item : value) {
+                        if (item.isObject()) {
+                            childObjects.add((ObjectNode) item);
+                        }
+                    }
+                } else if (value.isObject()) {
+                    // A [] marker on a single object is tolerated: FHIR sources vary on whether
+                    // a cardinality-many element arrives as an array or a lone object.
+                    childObjects.add((ObjectNode) value);
+                }
+            }
+
+            return childObjects;
+        }
+
+        /** Removes the path's final field from every object the walk reached. */
+        private boolean removeFieldFrom(List<ObjectNode> objects) {
+            String leafField = elements.get(elements.size() - 1).fieldName();
             boolean removed = false;
-            for (ObjectNode cursor : cursors) {
-                if (cursor.has(leaf)) {
-                    cursor.remove(leaf);
+            for (ObjectNode object : objects) {
+                if (object.has(leafField)) {
+                    object.remove(leafField);
                     removed = true;
                 }
             }
@@ -245,6 +261,6 @@ public class ClinicalDataRedactor {
 
     @FunctionalInterface
     private interface MismatchReporter {
-        void report(String rawPath, String segment, String resourceType);
+        void report(String rawPath, String element, String resourceType);
     }
 }

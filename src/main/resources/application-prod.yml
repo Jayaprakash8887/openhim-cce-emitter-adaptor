@@ -40,7 +40,7 @@ cce:
   emitter:
     patient-identifier-system: ${PATIENT_IDENTIFIER_SYSTEM:http://openphc.org/identifier/upid}
     redaction:
-      # The per-resourceType `rules` and `remove-paths` are defined ONCE, in application.yml, and
+      # The `rules` (the "*" entry plus one per resourceType) are defined ONCE, in application.yml, and
       # apply here unchanged - profile files layer over the base, so anything not restated is
       # inherited. They are deliberately not duplicated: two copies would drift, and the PROD copy
       # drifting is precisely the failure that leaks clinical data.

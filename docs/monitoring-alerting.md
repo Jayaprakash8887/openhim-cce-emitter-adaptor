@@ -158,7 +158,7 @@ groups:
           service: cce-emitter-adaptor
         annotations:
           summary: "CCE Emitter redaction path '{{ $labels.path }}' is redacting nothing ({{ $labels.resource_type }})"
-          description: "A configured remove-paths entry expects an object but the payload holds an array, so the path matches nothing and that content is being forwarded."
+          description: "A configured redaction path expects an object but the payload holds an array, so the path matches nothing and that content is being forwarded."
           runbook: "Find the WARN line 'Redaction path ... does not match' in the emitter log — it names the offending segment and the corrected form. Add '[]' to that segment in application.yml (e.g. reaction.manifestation -> reaction[].manifestation) and redeploy. See docs/data-dictionary.md §3.6 'Nested paths'."
 
       # No events received for extended period (during business hours)

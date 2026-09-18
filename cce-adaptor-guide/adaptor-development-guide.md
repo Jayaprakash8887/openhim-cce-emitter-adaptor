@@ -259,13 +259,21 @@ use an explicit path rather than widening the root list. Scope it to the resourc
 path applies to every type, which is rarely what you mean:
 
 ```yaml
-- resource-type: Encounter
+# Applied to EVERY resource
+- resource-type: "*"
   fields: >-
-    ... diagnosis
+    valueQuantity, valueString, ... note, text,
+    subject.display, patient.display
+
+# Each type lists only what it ADDS to the above
+- resource-type: Encounter
   # hospitalization is KEPT (hospitalization.origin is a facility source),
   # but its discharge outcome is clinical
-  remove-paths: [hospitalization.dischargeDisposition]
+  fields: diagnosis, hospitalization.dischargeDisposition
 ```
+
+Writing the shared content once, rather than repeating it in every type's list, is what keeps the
+file reviewable — and removes the chance of the copies drifting apart.
 
 Make an array step explicit — `reaction[].manifestation`, not `reaction.manifestation`. A path that
 walks into an array without the marker matches nothing.

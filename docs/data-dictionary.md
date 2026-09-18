@@ -157,17 +157,21 @@ CCE is a care **coordination** engine: it needs to know *that* a clinical step h
 | Property | Type | Default | Env Var | Description |
 |----------|------|---------|---------|-------------|
 | `cce.emitter.redaction.enabled` | Boolean | `true` | `REDACTION_ENABLED` | Master switch. `false` forwards full clinical payloads and logs a startup warning. |
-| `cce.emitter.redaction.rules` | List\<ResourceRule\> | see below | — (YAML) | Per-resource-type field lists. Empty = built-in defaults. |
-| `cce.emitter.redaction.remove-paths` | List\<String\> | `subject.display`, `patient.display` | `REDACTION_REMOVE_PATHS` | Nested paths removed from **every** resource type. |
+| `cce.emitter.redaction.rules` | List\<ResourceRule\> | see below | — (YAML) | One entry per resource type, plus the `"*"` entry. Empty = built-in defaults. |
 
-Each `ResourceRule` is `{ resource-type, fields, remove-paths }`. The entry with `resource-type: "*"` is the fallback applied to any type without its own rule.
+Each `ResourceRule` is `{ resource-type, fields }`.
 
-| Rule key | Applies to | Use for |
-|----------|-----------|---------|
-| `fields` | the resource **root** | the usual case — the finding is a top-level element |
-| `remove-paths` | nested content, **this type only** | a finding nested inside a structure that must be kept |
+#### How rules combine
 
-Global `remove-paths` and a rule's own `remove-paths` are **additive** — both are applied. Use the global list only for something genuinely universal (the patient's name); anything type-specific belongs on the rule, or it silently applies to every other resource type too.
+The rule with `resource-type: "*"` applies to **every** resource. A resource's own rule is applied **on top of it**. So each type lists only what is special about that type, and content that is sensitive everywhere is written once:
+
+```
+Condition    →  the "*" list  +  code
+Observation  →  the "*" list  +  component      (code deliberately absent)
+SomeNewType  →  the "*" list                    (no rule of its own)
+```
+
+There is deliberately no second wildcard for "types without a rule of their own": such a type is simply one with nothing to add, and `"*"` already covers it. One token, one meaning.
 
 #### Why rules are per resource type
 
@@ -184,40 +188,42 @@ A single flat field list cannot express this, which is why rules are keyed by re
 
 #### Default rules
 
-All rules include this common set — clinical content that is sensitive wherever it appears, and that nothing downstream reads:
+The `"*"` rule — applied to every resource. Clinical content that is sensitive wherever it appears and that nothing downstream reads, plus the patient's name:
 
 ```
 valueQuantity, valueCodeableConcept, valueString, valueBoolean, valueInteger,
 valueRange, valueRatio, valueSampledData, valueTime, valueDateTime, valuePeriod,
 valueAttachment, note, text, interpretation, dataAbsentReason, bodySite, method,
 specimen, referenceRange, contained, severity, stage, evidence, dosageInstruction,
-reasonCode, reasonReference, orderDetail, patientInstruction
+reasonCode, reasonReference, orderDetail, patientInstruction,
+subject.display, patient.display
 ```
 
-Plus, per type. Every resource type observed in Rwanda production has an explicit rule (PROD volumes shown), so a type can never fall through to the wildcard unnoticed:
+`subject.display` / `patient.display` are the patient's name — not clinical data, but direct identifying data in the same payload, and nothing downstream reads it; the patient is keyed on `subject.reference` / `patient.reference` (the UPID), which is preserved. Both spellings are needed because `AllergyIntolerance` and several other types use `patient` rather than `subject`.
 
-| `resource-type` | PROD volume | Additional fields removed | Rationale |
+Plus, per type — each listing **only its additions** to the above. Every resource type observed in Rwanda production has an explicit rule (PROD volumes shown), so a type can never fall through to the wildcard unnoticed:
+
+| `resource-type` | PROD volume | Entries (added to the `"*"` list) | Rationale |
 |-----------------|-------------|---------------------------|-----------|
 | `Observation` | 141,036 | `component` | Sub-observations, each with their own `value[x]`. **`code` kept** — it is the LOINC trigger key. |
-| `Encounter` | 47,708 | `diagnosis`, plus nested `hospitalization.dischargeDisposition` | `type` kept — carries `VISIT_ENCOUNTER` / `CONSULTATION_ENCOUNTER` / `TRANSFER_ENCOUNTER`, which drive protocol matching and the referral KPI. `class`, `serviceType`, `period`, `location`, `hospitalization`, `participant` kept. `reasonCode` removed via the common set. |
+| `Encounter` | 47,708 | `diagnosis`, `hospitalization.dischargeDisposition` | `type` kept — carries `VISIT_ENCOUNTER` / `CONSULTATION_ENCOUNTER` / `TRANSFER_ENCOUNTER`, which drive protocol matching and the referral KPI. `class`, `serviceType`, `period`, `location`, `hospitalization`, `participant` kept. `reasonCode` removed via the common set. |
 | `ServiceRequest` | 32,780 | `code` | The test requested. `category` kept (distinguishes a laboratory order), as are `intent`, `occurrenceDateTime` and `locationReference`. |
 | `MedicationRequest` | 30,166 | `medicationCodeableConcept`, `medicationReference`, `dispenseRequest` | The drug, and the quantity/refills. `intent` kept — protocol conditions read it — as are `authoredOn`, `requester`, `status`. |
 | `Condition` | 24,972 | `code` | The diagnosis itself. `clinicalStatus` / `verificationStatus` kept — the Rwanda protocol's diagnosis step triggers on them. |
 | `MedicationDispense` | 20,472 | `medicationCodeableConcept`, `medicationReference`, `quantity` | The drug and how much. `whenHandedOver` kept — a clinical-time field the SLA engine reads. |
-| `Consent` | 15,761 | — (common set only) | Carries no clinical finding; `category`, `scope`, `status` and `dateTime` are consent metadata and are what the Consent step matches on. Listed explicitly so it is documented as reviewed. |
+| `Consent` | 15,761 | — (nothing to add) | Carries no clinical finding; `category`, `scope`, `status` and `dateTime` are consent metadata and are what the Consent step matches on. Listed explicitly so it is documented as reviewed. |
 | `Procedure` | 4,174 | `code`, `outcome`, `complication` | The procedure performed and its result. `performedDateTime`, `location`, `performer` kept. |
 | `MedicationAdministration` | 1,614 | `medicationCodeableConcept`, `medicationReference`, `dosage`, `supportingInformation` | The drug, the amount given, and references that may point at clinical data. |
 | `AllergyIntolerance` | 22 | `code`, `reaction` | The allergen and reaction detail. `clinicalStatus` / `verificationStatus` / `onsetDateTime` / `recordedDate` kept. |
 | `Immunization` | 0 | `vaccineCode` | Not currently received. Pre-declared so a new feed cannot leak the vaccine given before anyone notices the type is unhandled. |
-| `*` (fallback) | — | — (common set only) | Conservative: leaves `code` alone, since on an unrecognised type it may be structural rather than a finding. `ClinicalDataRedactorTest.coversAllProductionResourceTypes` fails if a production type loses its explicit rule. |
+| `*` | — | the common set above | Applied to **every** resource, including types with no entry of their own. Conservative: leaves `code` alone, since on an unrecognised type it may be structural rather than a finding. `ClinicalDataRedactorTest.coversAllProductionResourceTypes` fails if a production type loses its explicit entry. |
 
-#### Nested paths
+#### Entry syntax
 
-Most findings sit at the resource root and are handled by `fields`. `remove-paths` exists for the case where the finding is nested inside a structure that has to be kept for another reason.
-
-**Path syntax.** Dot-delimited. A segment ending in `[]` steps through an array and applies to *every* element:
+An entry is either a root field name or a dot-delimited path. A segment ending in `[]` steps through an array and applies to *every* element:
 
 ```
+code                                   → Condition.code
 subject.display                        → Observation.subject.display
 hospitalization.dischargeDisposition   → Encounter.hospitalization.dischargeDisposition
 reaction[].manifestation               → AllergyIntolerance.reaction[*].manifestation
@@ -228,9 +234,7 @@ The `[]` is **required** wherever the data is an array. Without it the path walk
 
 > ⚠️ A path that matches nothing is the dangerous failure mode for a compliance control: it looks configured and redacts nothing. This is therefore **not silent** — where a path meets an array without `[]`, the adaptor logs a warning naming the path and the fix, and increments `cce.emitter.redaction.path.mismatch.total`. Alert on that counter being non-zero.
 
-**Global paths** (`subject.display`, `patient.display`) are the patient's name. Not clinical data, but direct identifying data in the same payload, and nothing downstream reads it; the patient is keyed on the reference (`Patient/<UPID>`), which is preserved. Both are needed because `AllergyIntolerance` and several other resources use `patient` rather than `subject`.
-
-**Type-scoped paths** currently configured:
+**Prefer removing a whole structure over pathing into it.** `component` on `Observation` drops every sub-observation's `value[x]` in one step. Reach for a path only when part of the structure must survive — the one current case:
 
 | `resource-type` | Path | Why it cannot be a root field |
 |-----------------|------|-------------------------------|
@@ -245,8 +249,8 @@ Protocol matching, SLA evaluation, facility attribution or the Insights dashboar
 #### Behaviour notes
 
 - **Never a blanket recursive scrub.** Named root-level fields plus explicitly configured nested paths. A recursive scrub would also strip the `valueString` *inside* `extension[]` — which is how `source-facility` attribution works — and the `coding`/`display` elements the dashboard renders. Every nested removal is something a human chose.
-- **Removing a whole array is cheaper and safer than pathing into it.** `fields` removal drops the entire subtree in one step, so `component` on `Observation` takes every sub-observation's `value[x]` with it. Reach for `remove-paths` only when part of the structure must survive.
-- **Rule order does not matter.** Field removal is a flat pass over the resource root; each removal is independent. Listing `component` first or last changes nothing.
+- **Removing a whole structure is cheaper and safer than pathing into it.** Removing a named field drops the entire subtree in one step, so `component` on `Observation` takes every sub-observation's `value[x]` with it. Reach for a dotted path only when part of the structure must survive.
+- **Entry order does not matter.** Each removal is independent, and the `"*"` rule and the type's own rule are simply applied in turn. Listing `component` first or last changes nothing.
 - **Ordering guarantee.** Redaction runs inside `CloudEventEnvelopeBuilder.build()`, i.e. *after* `PatientIdExtractor`, `FacilityIdExtractor` and clinical-time extraction have read the complete resource. Stripping clinical content therefore cannot affect routing, facility attribution or SLA timing.
 - **FHIR validity.** The Collector re-parses every payload with HAPI and rejects malformed bodies as `INVALID_FHIR`. Redacted payloads remain structurally valid FHIR R4 — covered by `RedactedPayloadStillValidFhirTest`.
 - **Logging.** Redaction log lines record field **names** only, never their values.
@@ -417,7 +421,7 @@ Registered in `InboundEventService` and `CollectorForwardingService` via constru
 | `cce.emitter.collector.retries` | Counter | — | `CollectorForwardingService` | Retry attempts exhausted |
 | `cce.emitter.events.filtered` | Counter | `source`, `facility`, `reason` | `FacilityFilter` | Events skipped by facility filter (not forwarded). `reason` value: `NOT_IN_ALLOWLIST`. |
 | `cce.emitter.events.redacted.total` | Counter | `resource_type` | `ClinicalDataRedactor` | Events from which at least one clinical field was removed. Incremented once per event, not once per field. A sustained drop to zero while `events.received` stays healthy means redaction has been switched off or the inbound payload shape has changed. |
-| `cce.emitter.redaction.path.mismatch.total` | Counter | `resource_type`, `path` | `ClinicalDataRedactor` | A configured `remove-paths` entry matched nothing because an array was found where an object was expected. **Non-zero means that path is redacting nothing** — add `[]` to the segment named in the accompanying warning. |
+| `cce.emitter.redaction.path.mismatch.total` | Counter | `resource_type`, `path` | `ClinicalDataRedactor` | A configured dotted path matched nothing because an array was found where an object was expected. **Non-zero means that path is redacting nothing** — add `[]` to the segment named in the accompanying warning. |
 
 ## 8. MDC Context Fields
 

@@ -13,9 +13,10 @@ import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.io.ClassPathResource;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -27,6 +28,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * it would quietly forward clinical data to the Collector. {@link ClinicalDataRedactorTest} proves
  * the redactor honours the rules it is given; this proves the rules production actually ships are
  * the right ones.
+ *
+ * <p>Assertions are made against the <b>effective</b> set for a resource type — the {@code "*"}
+ * entries plus that type's own — because that, not either list alone, is what gets removed.
  */
 class RedactionConfigBindingTest {
 
@@ -47,11 +51,18 @@ class RedactionConfigBindingTest {
                                 + "back to Java defaults with nothing auditable in configuration"));
     }
 
-    private static Map<String, List<String>> rulesByType() {
-        return properties.rules().stream().collect(Collectors.toMap(
-                ClinicalDataRedactionProperties.ResourceRule::resourceType,
-                ClinicalDataRedactionProperties.ResourceRule::fields,
-                (first, second) -> first));
+    /** Everything removed for this resource type: the "*" entries plus the type's own. */
+    private static Set<String> effectiveFor(String resourceType) {
+        Set<String> all = new LinkedHashSet<>(properties.allTypesFields());
+        all.addAll(properties.fieldsFor(resourceType));
+        return all;
+    }
+
+    private static List<String> configuredTypes() {
+        return properties.rules().stream()
+                .map(ClinicalDataRedactionProperties.ResourceRule::resourceType)
+                .filter(t -> !ClinicalDataRedactionProperties.ALL_RESOURCE_TYPES.equals(t))
+                .toList();
     }
 
     @Test
@@ -61,43 +72,47 @@ class RedactionConfigBindingTest {
     }
 
     @Test
-    @DisplayName("folded comma-separated field lists split into individual field names")
-    void foldedScalarsSplitIntoFieldNames() {
-        List<String> observation = rulesByType().get("Observation");
+    @DisplayName("the \"*\" rule exists and is not empty")
+    void allTypesRuleExists() {
+        assertThat(properties.allTypesFields())
+                .as("without the \"*\" rule, every type would redact only its own extras")
+                .isNotEmpty();
+    }
 
-        // Had the folded scalar not split, this would be a single comma-joined string.
-        assertThat(observation).contains("valueString", "valueCodeableConcept", "component");
-        assertThat(observation).allSatisfy(field -> {
+    @Test
+    @DisplayName("folded comma-separated field lists split into individual entries")
+    void foldedScalarsSplitIntoFieldNames() {
+        // If the folded scalar failed to split, this would be one long comma-joined string.
+        assertThat(properties.allTypesFields())
+                .contains("valueString", "valueCodeableConcept", "subject.display");
+        assertThat(properties.allTypesFields()).allSatisfy(field -> {
             assertThat(field).doesNotContain(",");
             assertThat(field).isEqualTo(field.trim());
         });
     }
 
     @Test
-    @DisplayName("every resource type seen in Rwanda is configured, plus the wildcard fallback")
+    @DisplayName("every resource type seen in Rwanda has its own entry")
     void allObservedResourceTypesConfigured() {
-        assertThat(rulesByType().keySet()).contains(
+        assertThat(configuredTypes()).contains(
                 // PROD
                 "Observation", "Encounter", "ServiceRequest", "MedicationRequest", "Condition",
                 "MedicationDispense", "Consent", "Procedure", "MedicationAdministration",
                 "AllergyIntolerance",
                 // UAT only
-                "ImagingStudy",
-                ClinicalDataRedactionProperties.ANY_RESOURCE_TYPE);
+                "ImagingStudy");
     }
 
     @Test
     @DisplayName("code is stripped where it is the finding, kept where it is the trigger key")
     void codeHandledPerResourceType() {
-        Map<String, List<String>> rules = rulesByType();
-
         for (String type : List.of("Condition", "AllergyIntolerance", "ServiceRequest", "Procedure")) {
-            assertThat(rules.get(type))
+            assertThat(effectiveFor(type))
                     .as("%s.code is the clinical finding and must be stripped", type)
                     .contains("code");
         }
 
-        assertThat(rules.get("Observation"))
+        assertThat(effectiveFor("Observation"))
                 .as("Observation.code is the LOINC trigger key — stripping it breaks protocol matching")
                 .doesNotContain("code");
     }
@@ -105,67 +120,71 @@ class RedactionConfigBindingTest {
     @Test
     @DisplayName("drug identity is stripped from every medication resource")
     void medicationResourcesStripTheDrug() {
-        Map<String, List<String>> rules = rulesByType();
         for (String type : List.of("MedicationRequest", "MedicationDispense", "MedicationAdministration")) {
-            assertThat(rules.get(type))
+            assertThat(effectiveFor(type))
                     .as("%s must not forward which drug was involved", type)
                     .contains("medicationCodeableConcept");
         }
     }
 
     @Test
-    @DisplayName("every rule strips the core value[x] set")
-    void everyRuleStripsValues() {
-        rulesByType().forEach((type, fields) -> assertThat(fields)
-                .as("rule '%s' must strip value[x]", type)
-                .contains("valueString", "valueQuantity", "valueCodeableConcept"));
+    @DisplayName("every configured type strips value[x] and the patient name via the \"*\" rule")
+    void everyTypeInheritsTheCommonSet() {
+        for (String type : configuredTypes()) {
+            assertThat(effectiveFor(type))
+                    .as("type '%s'", type)
+                    .contains("valueString", "valueQuantity", "valueCodeableConcept",
+                            "subject.display", "patient.display");
+        }
     }
 
     @Test
-    @DisplayName("patient-name paths are configured; the UPID reference is not")
-    void patientNamePathsConfigured() {
-        assertThat(properties.removePaths()).contains("subject.display", "patient.display");
-        assertThat(properties.removePaths()).doesNotContain("subject.reference", "patient.reference");
+    @DisplayName("a type with no rule of its own still gets the \"*\" entries")
+    void unknownTypeStillRedacted() {
+        assertThat(effectiveFor("SomeFutureResourceType"))
+                .contains("valueString", "subject.display")
+                // conservative: code may be structural on an unrecognised type
+                .doesNotContain("code");
     }
 
     @Test
-    @DisplayName("type-scoped nested paths bind, and stay scoped to their own type")
-    void typeScopedPathsBind() {
-        ClinicalDataRedactionProperties.ResourceRule encounter = properties.rules().stream()
-                .filter(r -> "Encounter".equals(r.resourceType()))
-                .findFirst().orElseThrow();
+    @DisplayName("the patient's name is stripped but the UPID reference is not")
+    void patientNameStrippedNotReference() {
+        assertThat(properties.allTypesFields()).contains("subject.display", "patient.display");
+        assertThat(properties.allTypesFields())
+                .doesNotContain("subject", "patient", "subject.reference", "patient.reference");
+    }
 
-        assertThat(encounter.removePaths())
-                .as("hospitalization is kept for facility attribution, so its clinical child "
-                        + "must be stripped by a nested path")
+    @Test
+    @DisplayName("a type-specific entry does not leak onto other types")
+    void typeSpecificEntriesStayScoped() {
+        assertThat(properties.fieldsFor("Encounter"))
                 .contains("hospitalization.dischargeDisposition");
-
-        // The same path must not be global, or it would apply to every resource type
-        assertThat(properties.removePaths()).doesNotContain("hospitalization.dischargeDisposition");
+        assertThat(properties.allTypesFields())
+                .as("if this were in the \"*\" rule it would apply to every resource type")
+                .doesNotContain("hospitalization.dischargeDisposition");
+        assertThat(effectiveFor("Procedure")).doesNotContain("hospitalization.dischargeDisposition");
     }
 
     @Test
     @DisplayName("no configured path omits [] where the FHIR element is a repeating one")
     void configuredPathsDeclareArraysCorrectly() {
-        // FHIR elements with cardinality 0..* that appear in our configured paths. A path
-        // traversing one of these without '[]' silently redacts nothing.
+        // FHIR elements with cardinality 0..* that could appear in our paths. A path traversing
+        // one of these without '[]' matches nothing while looking correctly configured.
         List<String> repeatingElements = List.of(
                 "reaction", "component", "series", "instance", "extension", "performer",
                 "category", "type", "location", "participant", "identifier", "coding");
 
-        List<String> allPaths = new java.util.ArrayList<>(properties.removePaths());
-        properties.rules().forEach(r -> allPaths.addAll(r.removePaths()));
+        List<String> allEntries = new ArrayList<>(properties.allTypesFields());
+        properties.rules().forEach(r -> allEntries.addAll(r.fields()));
 
-        for (String path : allPaths) {
-            String[] segments = path.split("\\.");
+        for (String entry : allEntries) {
+            String[] segments = entry.split("\\.");
             for (int i = 0; i < segments.length - 1; i++) {   // leaf is removed by name, so exempt
-                String segment = segments[i];
-                if (repeatingElements.contains(segment)) {
-                    assertThat(segment)
-                            .as("path '%s' traverses repeating element '%s' without '[]' — "
-                                    + "it would redact nothing", path, segment)
-                            .isEqualTo(segment + "[]");
-                }
+                assertThat(repeatingElements)
+                        .as("path '%s' traverses repeating element '%s' without '[]' — "
+                                + "it would redact nothing", entry, segments[i])
+                        .doesNotContain(segments[i]);
             }
         }
     }

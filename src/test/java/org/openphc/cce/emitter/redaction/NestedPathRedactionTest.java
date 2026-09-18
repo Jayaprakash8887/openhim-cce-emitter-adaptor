@@ -26,11 +26,18 @@ class NestedPathRedactionTest {
 
     private SimpleMeterRegistry registry = new SimpleMeterRegistry();
 
-    private ClinicalDataRedactor redactor(List<String> globalPaths,
+    /**
+     * @param allTypes entries for the "*" rule, applied to every resource
+     * @param rules    type-specific rules, applied on top
+     */
+    private ClinicalDataRedactor redactor(List<String> allTypes,
                                           List<ClinicalDataRedactionProperties.ResourceRule> rules) {
         registry = new SimpleMeterRegistry();
-        return new ClinicalDataRedactor(
-                new ClinicalDataRedactionProperties(true, globalPaths, rules), registry);
+        List<ClinicalDataRedactionProperties.ResourceRule> all = new java.util.ArrayList<>();
+        all.add(new ClinicalDataRedactionProperties.ResourceRule(
+                ClinicalDataRedactionProperties.ALL_RESOURCE_TYPES, allTypes));
+        all.addAll(rules);
+        return new ClinicalDataRedactor(new ClinicalDataRedactionProperties(true, all), registry);
     }
 
     private static JsonNode json(String raw) {
@@ -43,7 +50,7 @@ class NestedPathRedactionTest {
 
     private static ClinicalDataRedactionProperties.ResourceRule rule(
             String type, List<String> paths) {
-        return new ClinicalDataRedactionProperties.ResourceRule(type, List.of(), paths);
+        return new ClinicalDataRedactionProperties.ResourceRule(type, paths);
     }
 
     @Nested
@@ -199,25 +206,23 @@ class NestedPathRedactionTest {
         }
 
         @Test
-        @DisplayName("global and type-scoped paths are additive, not alternatives")
-        void globalAndTypeScopedBothApply() {
+        @DisplayName("all-types and type-scoped paths are additive, not alternatives")
+        void allTypesAndTypeScopedBothApply() {
             JsonNode out = twoTypes().redact(json("""
                     {"resourceType": "Encounter",
                      "subject": {"reference": "Patient/1", "display": "Jane Doe"},
                      "hospitalization": {"dischargeDisposition": {"text": "Died in hospital"}}}
                     """));
 
-            assertThat(out.path("subject").has("display")).as("global path").isFalse();
+            assertThat(out.path("subject").has("display")).as("all-types path").isFalse();
             assertThat(out.path("hospitalization").has("dischargeDisposition")).as("type path").isFalse();
             assertThat(out.path("subject").path("reference").asText()).isEqualTo("Patient/1");
         }
 
         @Test
-        @DisplayName("types without their own rule fall back to the wildcard's paths")
-        void wildcardPathsApplyAsFallback() {
-            ClinicalDataRedactor redactor = redactor(List.of(),
-                    List.of(rule(ClinicalDataRedactionProperties.ANY_RESOURCE_TYPE,
-                            List.of("outcome.text"))));
+        @DisplayName("a type with no rule of its own still gets the \"*\" entries")
+        void allTypesPathsApplyToUnknownTypes() {
+            ClinicalDataRedactor redactor = redactor(List.of("outcome.text"), List.of());
 
             JsonNode out = redactor.redact(json("""
                     {"resourceType": "SomeFutureResource", "outcome": {"text": "clinical finding"}}"""));
@@ -258,9 +263,9 @@ class NestedPathRedactionTest {
         @DisplayName("a path into an already-removed root field is a harmless no-op")
         void pathIntoRemovedRootField() {
             ClinicalDataRedactor redactor = new ClinicalDataRedactor(
-                    new ClinicalDataRedactionProperties(true, List.of(),
+                    new ClinicalDataRedactionProperties(true,
                             List.of(new ClinicalDataRedactionProperties.ResourceRule(
-                                    "Observation", List.of("component"), List.of("component[].valueQuantity")))),
+                                    "Observation", List.of("component", "component[].valueQuantity")))),
                     new SimpleMeterRegistry());
 
             JsonNode out = redactor.redact(json("""

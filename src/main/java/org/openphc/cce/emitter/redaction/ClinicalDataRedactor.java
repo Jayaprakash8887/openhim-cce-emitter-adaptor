@@ -30,8 +30,10 @@ import java.util.stream.Collectors;
  * is persisted in {@code inbound_event_log}, Kafka, {@code compliance_event_log} and the ClickHouse
  * mirror, is the minimised payload.
  *
- * <p>Which fields are removed depends on the resource type, because the same element carries very
- * different sensitivity per resource — see {@link ClinicalDataRedactionProperties}.
+ * <p>What is removed is the union of the {@code "*"} rule, applied to every resource, and the
+ * resource's own rule if it has one. Which fields those are depends on the resource type, because
+ * the same element carries very different sensitivity per resource — see
+ * {@link ClinicalDataRedactionProperties}.
  *
  * <p>Redaction removes named root-level fields plus explicitly configured nested paths. It is
  * never a blanket recursive scrub: that would also strip the {@code valueString} inside
@@ -58,14 +60,10 @@ public class ClinicalDataRedactor {
     private static final String ARRAY_MARKER = "[]";
 
     private final boolean enabled;
-    /** resourceType → root fields to remove. Includes the {@code *} fallback entry. */
-    private final Map<String, Set<String>> fieldsByResourceType;
-    private final Set<String> fallbackFields;
-    /** resourceType → nested paths for that type only. Includes the {@code *} fallback entry. */
+    /** Applied to every resource, whatever its type. */
+    private final List<CompiledPath> allTypesPaths;
+    /** resourceType → the entries specific to that type, applied on top of {@link #allTypesPaths}. */
     private final Map<String, List<CompiledPath>> pathsByResourceType;
-    private final List<CompiledPath> fallbackPaths;
-    /** Nested paths applied to every resource regardless of type. */
-    private final List<CompiledPath> globalPaths;
     private final MeterRegistry meterRegistry;
 
     /** Warn once per path+resourceType — at PROD volumes this would otherwise flood the log. */
@@ -75,33 +73,26 @@ public class ClinicalDataRedactor {
         this.enabled = Boolean.TRUE.equals(properties.enabled());
         this.meterRegistry = meterRegistry;
 
-        this.fieldsByResourceType = new LinkedHashMap<>();
+        this.allTypesPaths = compile(properties.allTypesFields());
+
         this.pathsByResourceType = new LinkedHashMap<>();
         for (ResourceRule rule : properties.rules()) {
             if (rule == null || rule.resourceType() == null) {
                 continue;
             }
             String type = rule.resourceType().trim();
-            fieldsByResourceType.put(type, rule.fields().stream()
-                    .map(String::trim)
-                    .filter(f -> !f.isEmpty())
-                    .collect(Collectors.toCollection(LinkedHashSet::new)));
-            pathsByResourceType.put(type, compile(rule.removePaths()));
+            if (ClinicalDataRedactionProperties.ALL_RESOURCE_TYPES.equals(type)) {
+                continue;   // already held as allTypesPaths
+            }
+            pathsByResourceType.put(type, compile(rule.fields()));
         }
-        this.fallbackFields = fieldsByResourceType.getOrDefault(
-                ClinicalDataRedactionProperties.ANY_RESOURCE_TYPE, Set.of());
-        this.fallbackPaths = pathsByResourceType.getOrDefault(
-                ClinicalDataRedactionProperties.ANY_RESOURCE_TYPE, List.of());
-
-        this.globalPaths = compile(properties.removePaths());
 
         if (enabled) {
-            long typeScopedPaths = pathsByResourceType.values().stream().mapToLong(List::size).sum();
-            log.info("Clinical-data redaction ACTIVE — rules for {} resource type(s) [{}], "
-                            + "{} global nested path(s), {} type-scoped nested path(s)",
-                    fieldsByResourceType.size(),
-                    String.join(", ", fieldsByResourceType.keySet()),
-                    globalPaths.size(), typeScopedPaths);
+            log.info("Clinical-data redaction ACTIVE — {} entr(ies) applied to all resources, "
+                            + "plus type-specific rules for {} type(s) [{}]",
+                    allTypesPaths.size(),
+                    pathsByResourceType.size(),
+                    String.join(", ", pathsByResourceType.keySet()));
         } else {
             log.warn("Clinical-data redaction DISABLED — full clinical payloads will be forwarded to the collector");
         }
@@ -131,31 +122,10 @@ public class ClinicalDataRedactor {
 
         ObjectNode resource = (ObjectNode) data;
         String resourceType = resource.path("resourceType").asText("");
-        Set<String> fields = fieldsByResourceType.getOrDefault(resourceType, fallbackFields);
-        List<CompiledPath> typePaths = pathsByResourceType.getOrDefault(resourceType, fallbackPaths);
 
         List<String> removed = new ArrayList<>();
-
-        for (String field : fields) {
-            if (resource.has(field)) {
-                resource.remove(field);
-                removed.add(field);
-            }
-        }
-
-        // Global paths first, then the type's own — both are applied; they are additive, not
-        // alternatives. Root fields are already gone by now, so a path into a removed structure
-        // is a no-op rather than a conflict.
-        for (CompiledPath path : globalPaths) {
-            if (path.removeFrom(resource, resourceType, this::reportMismatch)) {
-                removed.add(path.raw());
-            }
-        }
-        for (CompiledPath path : typePaths) {
-            if (path.removeFrom(resource, resourceType, this::reportMismatch)) {
-                removed.add(path.raw());
-            }
-        }
+        applyAll(allTypesPaths, resource, resourceType, removed);
+        applyAll(pathsByResourceType.getOrDefault(resourceType, List.of()), resource, resourceType, removed);
 
         if (!removed.isEmpty()) {
             Counter.builder("cce.emitter.events.redacted.total")
@@ -168,6 +138,15 @@ public class ClinicalDataRedactor {
         }
 
         return resource;
+    }
+
+    private void applyAll(List<CompiledPath> paths, ObjectNode resource,
+                          String resourceType, List<String> removed) {
+        for (CompiledPath path : paths) {
+            if (path.removeFrom(resource, resourceType, this::reportMismatch)) {
+                removed.add(path.raw());
+            }
+        }
     }
 
     /**

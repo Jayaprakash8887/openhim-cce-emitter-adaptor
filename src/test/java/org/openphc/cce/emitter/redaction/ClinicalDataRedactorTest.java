@@ -30,7 +30,7 @@ class ClinicalDataRedactorTest {
     @BeforeEach
     void setUp() {
         redactor = new ClinicalDataRedactor(
-                new ClinicalDataRedactionProperties(true, null, null), new SimpleMeterRegistry());
+                new ClinicalDataRedactionProperties(true, null), new SimpleMeterRegistry());
     }
 
     private JsonNode redact(String json) throws Exception {
@@ -86,7 +86,7 @@ class ClinicalDataRedactorTest {
 
         private final ObjectMapper m = new ObjectMapper();
         private final ClinicalDataRedactor r = new ClinicalDataRedactor(
-                new ClinicalDataRedactionProperties(true, null, null), new SimpleMeterRegistry());
+                new ClinicalDataRedactionProperties(true, null), new SimpleMeterRegistry());
 
         @Test
         @DisplayName("free-text finding removed, LOINC code kept for protocol matching")
@@ -259,8 +259,8 @@ class ClinicalDataRedactorTest {
     @DisplayName("custom per-type rules override the defaults")
     void honoursCustomRules() throws Exception {
         ClinicalDataRedactor custom = new ClinicalDataRedactor(
-                new ClinicalDataRedactionProperties(true, List.of(),
-                        List.of(ClinicalDataRedactionProperties.ResourceRule.of("Observation", List.of("status")))),
+                new ClinicalDataRedactionProperties(true,
+                        List.of(new ClinicalDataRedactionProperties.ResourceRule("Observation", List.of("status")))),
                 new SimpleMeterRegistry());
         JsonNode out = custom.redact(mapper.readTree(
                 """
@@ -275,7 +275,7 @@ class ClinicalDataRedactorTest {
     @DisplayName("redaction disabled leaves the payload untouched")
     void disabledIsPassThrough() throws Exception {
         ClinicalDataRedactor off = new ClinicalDataRedactor(
-                new ClinicalDataRedactionProperties(false, null, null), new SimpleMeterRegistry());
+                new ClinicalDataRedactionProperties(false, null), new SimpleMeterRegistry());
         JsonNode out = off.redact(mapper.readTree(
                 """
                 { "resourceType": "Condition", "code": { "coding": [ { "display": "Type 2 diabetes mellitus" } ] } }
@@ -288,20 +288,20 @@ class ClinicalDataRedactorTest {
     @DisplayName("every resource type seen in production has an explicit rule")
     void coversAllProductionResourceTypes() {
         // Types observed in Rwanda PROD inbound_event_log. If eBuzima starts sending a new type,
-        // this test should fail and force a deliberate decision rather than silently falling back
-        // to the wildcard rule (which leaves `code` intact).
+        // this test should fail and force a deliberate decision rather than the type silently
+        // receiving only the "*" entries (which leave `code` intact).
         List<String> production = List.of(
                 "Observation", "Encounter", "ServiceRequest", "MedicationRequest", "Condition",
                 "MedicationDispense", "Consent", "Procedure", "MedicationAdministration",
                 "AllergyIntolerance");
 
-        List<String> configured = new ClinicalDataRedactionProperties(true, null, null)
+        List<String> configured = new ClinicalDataRedactionProperties(true, null)
                 .rules().stream()
                 .map(ClinicalDataRedactionProperties.ResourceRule::resourceType)
                 .toList();
 
         assertThat(configured).containsAll(production);
-        assertThat(configured).contains(ClinicalDataRedactionProperties.ANY_RESOURCE_TYPE);
+        assertThat(configured).contains(ClinicalDataRedactionProperties.ALL_RESOURCE_TYPES);
     }
 
     @Test

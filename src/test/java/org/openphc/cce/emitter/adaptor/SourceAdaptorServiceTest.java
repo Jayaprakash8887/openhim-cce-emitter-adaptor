@@ -47,7 +47,7 @@ class SourceAdaptorServiceTest {
      */
     private static org.openphc.cce.emitter.redaction.ClinicalDataRedactor testRedactor() {
         return new org.openphc.cce.emitter.redaction.ClinicalDataRedactor(
-                new org.openphc.cce.emitter.redaction.ClinicalDataRedactionProperties(true, null, null),
+                new org.openphc.cce.emitter.redaction.ClinicalDataRedactionProperties(true, null),
                 new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
     }
 

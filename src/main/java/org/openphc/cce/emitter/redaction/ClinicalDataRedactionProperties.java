@@ -12,6 +12,19 @@ import java.util.List;
  * happened, when, for which patient and at which facility — not <em>what the clinical finding
  * was</em>.
  *
+ * <h2>How rules combine</h2>
+ *
+ * <p>The rule with resource type {@value #ALL_RESOURCE_TYPES} is applied to <b>every</b> resource.
+ * A resource's own rule, if it has one, is applied <b>in addition</b>. So each type's rule lists
+ * only what is special about that type, and the content that is sensitive everywhere is written
+ * once:
+ *
+ * <pre>
+ *   Condition  →  the "*" list  +  code
+ *   Observation → the "*" list  +  component      (code deliberately absent — see below)
+ *   SomeNewType → the "*" list                    (no rule of its own)
+ * </pre>
+ *
  * <p>Rules are per-resource-type because the same FHIR element carries very different sensitivity
  * depending on the resource. {@code code} is the clearest case:
  *
@@ -24,81 +37,64 @@ import java.util.List;
  *       tracking working</li>
  * </ul>
  *
- * <h2>Nested paths</h2>
+ * <h2>Field syntax</h2>
  *
- * <p>Root-level fields are listed in each rule's {@code fields}. Content nested inside a structure
- * that must be kept is expressed as a dot-delimited path, either globally ({@code removePaths},
- * applied to every resource) or scoped to one type ({@link ResourceRule#removePaths}).
- *
- * <p>A segment ending in {@code []} steps through an array and applies to every element:
+ * <p>An entry is either a root field name or a dot-delimited path. A segment ending in {@code []}
+ * steps through an array and applies to every element:
  *
  * <pre>
+ *   code                                 → Condition.code
  *   subject.display                      → Observation.subject.display
  *   hospitalization.dischargeDisposition → Encounter.hospitalization.dischargeDisposition
  *   reaction[].manifestation             → AllergyIntolerance.reaction[*].manifestation
  * </pre>
  *
- * <p>The {@code []} marker is required where the data is an array. A path that omits it walks into
- * an object only, so {@code reaction.manifestation} would match nothing — see
- * {@link ClinicalDataRedactor} for how that mismatch is surfaced rather than silently ignored.
+ * <p>The {@code []} marker is required where the data is an array; without it the path matches
+ * nothing. That is not silent — see {@link ClinicalDataRedactor} for how it is reported.
  *
- * @param enabled     master switch; {@code false} passes payloads through untouched
- * @param removePaths nested paths removed from every resource regardless of type (e.g.
- *                    {@code subject.display} — the patient's name). Type-specific paths belong on
- *                    the rule instead; the two are additive.
- * @param rules       per-resource-type field lists; the entry with resourceType {@code *} applies
- *                    to any type without its own rule
+ * <p>Prefer removing a whole structure over pathing into it. {@code component} on Observation drops
+ * every sub-observation in one step; a path is only needed when part of the structure must survive.
+ *
+ * @param enabled master switch; {@code false} passes payloads through untouched
+ * @param rules   one entry per resource type, plus the {@value #ALL_RESOURCE_TYPES} entry applied
+ *                to everything
  */
 @ConfigurationProperties(prefix = "cce.emitter.redaction")
 public record ClinicalDataRedactionProperties(
         Boolean enabled,
-        List<String> removePaths,
         List<ResourceRule> rules
 ) {
 
-    /** Wildcard resource type: the fallback rule applied when no type-specific rule matches. */
-    public static final String ANY_RESOURCE_TYPE = "*";
+    /**
+     * The rule applied to every resource, on top of that resource's own rule.
+     *
+     * <p>There is deliberately no second wildcard token for "types without a rule of their own":
+     * such a type is simply one with nothing to add, and this rule already covers it. One token,
+     * one meaning.
+     */
+    public static final String ALL_RESOURCE_TYPES = "*";
 
     /**
-     * Redaction rule for one FHIR resource type.
+     * What to remove for one FHIR resource type.
      *
-     * <p>{@code fields} covers the resource root, which is where most clinical findings live.
-     * {@code removePaths} covers content nested inside a structure that must otherwise be kept —
-     * {@code Encounter.hospitalization} is retained because {@code hospitalization.origin} drives
-     * facility attribution, yet {@code hospitalization.dischargeDisposition} is clinical.
-     *
-     * @param resourceType FHIR resource type (e.g. {@code Condition}), or {@code *} for the default
-     * @param fields       field names removed from that resource's root
-     * @param removePaths  dot-delimited nested paths removed from this resource type only, in
-     *                     addition to the global {@link ClinicalDataRedactionProperties#removePaths}.
-     *                     A segment ending in {@code []} steps through an array — see
-     *                     {@link ClinicalDataRedactionProperties#removePaths} for the syntax.
+     * @param resourceType FHIR resource type (e.g. {@code Condition}), or {@value #ALL_RESOURCE_TYPES}
+     * @param fields       root field names and/or dot-delimited paths to remove
      */
-    public record ResourceRule(String resourceType, List<String> fields, List<String> removePaths) {
-
+    public record ResourceRule(String resourceType, List<String> fields) {
         public ResourceRule {
             if (fields == null) fields = List.of();
-            if (removePaths == null) removePaths = List.of();
         }
-
-        /**
-         * A rule with no type-specific nested paths — the common case.
-         *
-         * <p>Deliberately a static factory, not an overloaded constructor: an extra constructor on
-         * a record stops Spring Boot identifying the canonical one, and the whole
-         * {@code cce.emitter.redaction} tree then fails to bind.
-         */
-        public static ResourceRule of(String resourceType, List<String> fields) {
-            return new ResourceRule(resourceType, fields, List.of());
-        }
+        // No convenience constructor: an extra constructor on a record stops Spring Boot
+        // identifying the canonical one, and the whole redaction tree then fails to bind.
     }
 
     /**
-     * Clinical content that is sensitive on every resource type that carries it. Verified against
-     * every reader in the platform (matcher, collector, compliance, insights, ClickHouse
-     * materialised columns): none of these are consumed, so removing them changes no behaviour.
+     * Content that is sensitive on every resource type that carries it, plus the patient's name.
+     * Verified against every reader in the platform (matcher, collector, compliance, insights,
+     * ClickHouse materialised columns): none of these are consumed, so removing them changes no
+     * behaviour.
      */
-    private static final List<String> COMMON_CLINICAL_FIELDS = List.of(
+    private static final List<String> ALL_TYPES_FIELDS = List.of(
             // value[x] — the measurement or coded finding
             "valueQuantity", "valueCodeableConcept", "valueString", "valueBoolean",
             "valueInteger", "valueRange", "valueRatio", "valueSampledData",
@@ -112,103 +108,100 @@ public record ClinicalDataRedactionProperties(
             "severity", "stage", "evidence",
             // Ordering / prescribing detail and clinical justification
             "dosageInstruction", "reasonCode", "reasonReference",
-            "orderDetail", "patientInstruction"
+            "orderDetail", "patientInstruction",
+            // The patient's name. Not clinical, but direct identifying data in the same payload,
+            // and nothing downstream reads it — the patient is keyed on subject.reference /
+            // patient.reference (the UPID), which is preserved. Both spellings are needed because
+            // AllergyIntolerance and several other types use `patient` rather than `subject`.
+            "subject.display", "patient.display"
     );
 
-    /** {@link #COMMON_CLINICAL_FIELDS} plus the extra fields given. */
-    private static List<String> commonPlus(String... extra) {
-        List<String> all = new ArrayList<>(COMMON_CLINICAL_FIELDS);
-        all.addAll(List.of(extra));
-        return List.copyOf(all);
-    }
-
     /**
-     * One rule per resource type actually observed in Rwanda production, plus a wildcard fallback.
-     * Volumes at time of writing (PROD {@code inbound_event_log}): Observation 141k, Encounter 48k,
-     * ServiceRequest 33k, MedicationRequest 30k, Condition 25k, MedicationDispense 20k, Consent 16k,
-     * Procedure 4.2k, MedicationAdministration 1.6k, AllergyIntolerance 22.
+     * One rule per resource type observed in Rwanda, listing only what that type adds to
+     * {@link #ALL_TYPES_FIELDS}. Volumes at time of writing (PROD {@code inbound_event_log}):
+     * Observation 141k, Encounter 48k, ServiceRequest 33k, MedicationRequest 30k, Condition 25k,
+     * MedicationDispense 20k, Consent 16k, Procedure 4.2k, MedicationAdministration 1.6k,
+     * AllergyIntolerance 22.
      */
     private static final List<ResourceRule> DEFAULT_RULES = List.of(
+            new ResourceRule(ALL_RESOURCE_TYPES, ALL_TYPES_FIELDS),
+
             // code = the observation TYPE (LOINC) and is what protocol triggers match on — kept.
             // component holds sub-observations, each with their own value[x].
-            ResourceRule.of("Observation", commonPlus("component")),
+            new ResourceRule("Observation", List.of("component")),
 
-            // Encounter.type carries VISIT_ENCOUNTER / CONSULTATION_ENCOUNTER / TRANSFER_ENCOUNTER,
-            // which drive protocol matching and the referral KPI — type, class and serviceType kept.
-            // hospitalization and location are the facility source, also kept.
-            // diagnosis = the encounter's diagnosis; reasonCode = why the patient attended.
-            // dischargeDisposition ("Died in hospital", "Transferred to ICU") is a clinical outcome,
-            // but it is nested inside hospitalization, which is KEPT because hospitalization.origin
-            // is a facility source. Hence a type-scoped nested path rather than a root field.
-            new ResourceRule("Encounter", commonPlus("diagnosis"),
-                    List.of("hospitalization.dischargeDisposition")),
+            // diagnosis = the encounter's diagnosis. type/class/serviceType drive protocol matching
+            // and the referral KPI; hospitalization and location are the facility source, so they
+            // are kept — hence dischargeDisposition ("Died in hospital") needs a nested path.
+            new ResourceRule("Encounter",
+                    List.of("diagnosis", "hospitalization.dischargeDisposition")),
 
             // code = the test/procedure requested ("a1-Acid Glycoprotein").
             // category (laboratory vs other) and locationReference (facility) are kept.
-            ResourceRule.of("ServiceRequest", commonPlus("code")),
+            new ResourceRule("ServiceRequest", List.of("code")),
 
             // medicationCodeableConcept = the drug; dispenseRequest carries quantity and refills.
             // intent and authoredOn are kept — protocol conditions read intent.
-            ResourceRule.of("MedicationRequest",
-                    commonPlus("medicationCodeableConcept", "medicationReference", "dispenseRequest")),
+            new ResourceRule("MedicationRequest",
+                    List.of("medicationCodeableConcept", "medicationReference", "dispenseRequest")),
 
             // code = the diagnosis itself. clinicalStatus/verificationStatus are the trigger keys.
-            ResourceRule.of("Condition", commonPlus("code")),
+            new ResourceRule("Condition", List.of("code")),
 
             // quantity = how much of the drug was dispensed. whenHandedOver is kept (clinical time).
-            ResourceRule.of("MedicationDispense",
-                    commonPlus("medicationCodeableConcept", "medicationReference", "quantity")),
+            new ResourceRule("MedicationDispense",
+                    List.of("medicationCodeableConcept", "medicationReference", "quantity")),
 
             // Consent carries no clinical finding — category/scope/status are consent metadata, and
-            // are what the Consent step matches on. Listed explicitly so it is documented as
-            // reviewed rather than silently falling through to the wildcard rule.
-            ResourceRule.of("Consent", COMMON_CLINICAL_FIELDS),
+            // are what the Consent step matches on. Listed with nothing to add so it is documented
+            // as reviewed rather than merely unmentioned.
+            new ResourceRule("Consent", List.of()),
 
             // code = the procedure performed. performedDateTime and location are kept.
-            ResourceRule.of("Procedure", commonPlus("code", "outcome", "complication")),
+            new ResourceRule("Procedure", List.of("code", "outcome", "complication")),
 
             // dosage = how much was administered; supportingInformation may point at clinical data.
-            ResourceRule.of("MedicationAdministration",
-                    commonPlus("medicationCodeableConcept", "medicationReference",
+            new ResourceRule("MedicationAdministration",
+                    List.of("medicationCodeableConcept", "medicationReference",
                             "dosage", "supportingInformation")),
 
             // code = the allergen ("allergy on aminophyline"); reaction holds manifestation detail.
-            ResourceRule.of("AllergyIntolerance", commonPlus("code", "reaction")),
+            new ResourceRule("AllergyIntolerance", List.of("code", "reaction")),
 
             // Seen in UAT (not yet in PROD). The radiology findings live in fields that appear on
             // no other resource type — conclusion is free-text narrative from the reporting
-            // radiologist — so without this rule they would pass straight through the wildcard.
-            ResourceRule.of("ImagingStudy",
-                    commonPlus("conclusion", "conclusionCode", "description",
+            // radiologist — so without this rule they would not be removed at all.
+            new ResourceRule("ImagingStudy",
+                    List.of("conclusion", "conclusionCode", "description",
                             "procedureCode", "series", "modality")),
 
             // Not currently received from eBuzima, but included so a new feed cannot leak the
             // vaccine given before anyone notices the resource type is unhandled.
-            ResourceRule.of("Immunization", commonPlus("vaccineCode")),
-
-            // Fallback for any resource type without its own rule. Conservative: strips the common
-            // clinical fields but leaves `code` alone, since on an unrecognised type `code` may be
-            // the structural discriminator rather than a finding.
-            ResourceRule.of(ANY_RESOURCE_TYPE, COMMON_CLINICAL_FIELDS)
-    );
-
-    /**
-     * Nested paths removed from every resource.
-     *
-     * <p>These are patient names. Not clinical data, but direct identifying data travelling in the
-     * same payload, and nothing downstream reads them — the patient is keyed on the reference
-     * ({@code Patient/<UPID>}), which is preserved. {@code patient.display} is included because
-     * AllergyIntolerance and several other resources use {@code patient} rather than
-     * {@code subject}.
-     */
-    private static final List<String> DEFAULT_REMOVE_PATHS = List.of(
-            "subject.display",
-            "patient.display"
+            new ResourceRule("Immunization", List.of("vaccineCode"))
     );
 
     public ClinicalDataRedactionProperties {
         if (enabled == null) enabled = Boolean.TRUE;
-        if (removePaths == null || removePaths.isEmpty()) removePaths = DEFAULT_REMOVE_PATHS;
         if (rules == null || rules.isEmpty()) rules = DEFAULT_RULES;
+    }
+
+    /** The fields applied to every resource, or empty if no {@value #ALL_RESOURCE_TYPES} rule exists. */
+    public List<String> allTypesFields() {
+        return rules.stream()
+                .filter(r -> ALL_RESOURCE_TYPES.equals(r.resourceType()))
+                .findFirst()
+                .map(ResourceRule::fields)
+                .orElse(List.of());
+    }
+
+    /** The fields specific to {@code resourceType}, excluding {@link #allTypesFields()}. */
+    public List<String> fieldsFor(String resourceType) {
+        List<String> found = new ArrayList<>();
+        rules.stream()
+                .filter(r -> !ALL_RESOURCE_TYPES.equals(r.resourceType()))
+                .filter(r -> r.resourceType().equals(resourceType))
+                .findFirst()
+                .ifPresent(r -> found.addAll(r.fields()));
+        return List.copyOf(found);
     }
 }

@@ -73,7 +73,7 @@ public class ClinicalDataRedactor {
         this.enabled = Boolean.TRUE.equals(properties.enabled());
         this.meterRegistry = meterRegistry;
 
-        this.allTypesPaths = compile(properties.allTypesFields());
+        this.allTypesPaths = compile(properties.getAllResourceTypesFields());
 
         this.pathsByResourceType = new LinkedHashMap<>();
         for (ResourceRule rule : properties.rules()) {

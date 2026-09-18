@@ -53,7 +53,7 @@ class RedactionConfigBindingTest {
 
     /** Everything removed for this resource type: the "*" entries plus the type's own. */
     private static Set<String> effectiveFor(String resourceType) {
-        Set<String> all = new LinkedHashSet<>(properties.allTypesFields());
+        Set<String> all = new LinkedHashSet<>(properties.getAllResourceTypesFields());
         all.addAll(properties.fieldsFor(resourceType));
         return all;
     }
@@ -74,7 +74,7 @@ class RedactionConfigBindingTest {
     @Test
     @DisplayName("the \"*\" rule exists and is not empty")
     void allTypesRuleExists() {
-        assertThat(properties.allTypesFields())
+        assertThat(properties.getAllResourceTypesFields())
                 .as("without the \"*\" rule, every type would redact only its own extras")
                 .isNotEmpty();
     }
@@ -83,9 +83,9 @@ class RedactionConfigBindingTest {
     @DisplayName("folded comma-separated field lists split into individual entries")
     void foldedScalarsSplitIntoFieldNames() {
         // If the folded scalar failed to split, this would be one long comma-joined string.
-        assertThat(properties.allTypesFields())
+        assertThat(properties.getAllResourceTypesFields())
                 .contains("valueString", "valueCodeableConcept", "subject.display");
-        assertThat(properties.allTypesFields()).allSatisfy(field -> {
+        assertThat(properties.getAllResourceTypesFields()).allSatisfy(field -> {
             assertThat(field).doesNotContain(",");
             assertThat(field).isEqualTo(field.trim());
         });
@@ -150,8 +150,8 @@ class RedactionConfigBindingTest {
     @Test
     @DisplayName("the patient's name is stripped but the UPID reference is not")
     void patientNameStrippedNotReference() {
-        assertThat(properties.allTypesFields()).contains("subject.display", "patient.display");
-        assertThat(properties.allTypesFields())
+        assertThat(properties.getAllResourceTypesFields()).contains("subject.display", "patient.display");
+        assertThat(properties.getAllResourceTypesFields())
                 .doesNotContain("subject", "patient", "subject.reference", "patient.reference");
     }
 
@@ -160,7 +160,7 @@ class RedactionConfigBindingTest {
     void typeSpecificEntriesStayScoped() {
         assertThat(properties.fieldsFor("Encounter"))
                 .contains("hospitalization.dischargeDisposition");
-        assertThat(properties.allTypesFields())
+        assertThat(properties.getAllResourceTypesFields())
                 .as("if this were in the \"*\" rule it would apply to every resource type")
                 .doesNotContain("hospitalization.dischargeDisposition");
         assertThat(effectiveFor("Procedure")).doesNotContain("hospitalization.dischargeDisposition");
@@ -175,7 +175,7 @@ class RedactionConfigBindingTest {
                 "reaction", "component", "series", "instance", "extension", "performer",
                 "category", "type", "location", "participant", "identifier", "coding");
 
-        List<String> allEntries = new ArrayList<>(properties.allTypesFields());
+        List<String> allEntries = new ArrayList<>(properties.getAllResourceTypesFields());
         properties.rules().forEach(r -> allEntries.addAll(r.fields()));
 
         for (String entry : allEntries) {

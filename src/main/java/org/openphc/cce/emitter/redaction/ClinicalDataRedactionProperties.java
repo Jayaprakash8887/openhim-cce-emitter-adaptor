@@ -186,7 +186,7 @@ public record ClinicalDataRedactionProperties(
     }
 
     /** The fields applied to every resource, or empty if no {@value #ALL_RESOURCE_TYPES} rule exists. */
-    public List<String> allTypesFields() {
+    public List<String> getAllResourceTypesFields() {
         return rules.stream()
                 .filter(r -> ALL_RESOURCE_TYPES.equals(r.resourceType()))
                 .findFirst()
@@ -194,7 +194,7 @@ public record ClinicalDataRedactionProperties(
                 .orElse(List.of());
     }
 
-    /** The fields specific to {@code resourceType}, excluding {@link #allTypesFields()}. */
+    /** The fields specific to {@code resourceType}, excluding {@link #getAllResourceTypesFields()}. */
     public List<String> fieldsFor(String resourceType) {
         List<String> found = new ArrayList<>();
         rules.stream()
